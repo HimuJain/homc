@@ -9,6 +9,8 @@ export const PersonaSchema = z.object({
   explorationDepth: z.number().min(0).max(1),
   errorTolerance: z.number().min(0).max(1),
   speedBias: z.number().min(0).max(1),
+  chaosRate: z.number().min(0).max(1),
+  distractionDepth: z.number().min(0).max(1),
 })
 
 export const TaskSchema = z.object({
@@ -46,12 +48,22 @@ export const MetricsSchema = z.object({
   recoverySuccessRate: z.number(),
 })
 
+export const TaskHistoryEntrySchema = z.object({
+  stepNumber: z.number(),
+  taskId: z.string(),
+  taskGoal: z.string(),
+  trigger: z.enum(['primary', 'chaos', 'return']),
+  outcome: z.enum(['success', 'fail', 'incomplete']).optional(),
+})
+
 export const RunResultSchema = z.object({
   id: z.string(),
   variant: z.enum(['A', 'B']),
   persona: PersonaSchema,
   task: TaskSchema,
   success: z.boolean(),
+  successScore: z.number().min(0).max(1),
+  taskHistory: z.array(TaskHistoryEntrySchema),
   steps: z.array(StepSchema),
   metrics: MetricsSchema,
   startedAt: z.number(),
@@ -64,6 +76,7 @@ export type Task = z.infer<typeof TaskSchema>
 export type Action = z.infer<typeof ActionSchema>
 export type Step = z.infer<typeof StepSchema>
 export type Metrics = z.infer<typeof MetricsSchema>
+export type TaskHistoryEntry = z.infer<typeof TaskHistoryEntrySchema>
 export type RunResult = z.infer<typeof RunResultSchema>
 
 export interface VariantStats {
@@ -77,8 +90,8 @@ export interface VariantStats {
 
 export interface PersonaResult {
   personaName: string
-  variantA: { success: boolean; steps: number; timeMs: number } | null
-  variantB: { success: boolean; steps: number; timeMs: number } | null
+  variantA: { success: boolean; successScore: number; steps: number; timeMs: number; taskDrift: string } | null
+  variantB: { success: boolean; successScore: number; steps: number; timeMs: number; taskDrift: string } | null
 }
 
 export interface TaskStats {
