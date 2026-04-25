@@ -6,7 +6,7 @@ import { tasks } from './tasks'
 import { runSimulation } from './runner'
 
 const VARIANTS: Array<'A' | 'B'> = ['A', 'B']
-const SELECTED_PERSONAS = personas.slice(0, 3)
+const SELECTED_PERSONAS = personas.slice(0, 5)
 const SELECTED_TASKS = tasks.slice(0, 2)
 
 async function main() {

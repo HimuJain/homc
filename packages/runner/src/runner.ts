@@ -95,10 +95,22 @@ export async function runSimulation(
         url,
         durationMs: Date.now() - stepStart,
       })
+
+      // Programmatic bail for very impatient personas: if same action repeated 3 times, they give up
+      if (persona.patience < 0.25 && steps.length >= 3) {
+        const last3 = steps.slice(-3).map(s => JSON.stringify(s.action))
+        if (last3[0] === last3[1] && last3[1] === last3[2]) {
+          const reason = `Gave up after ${steps.length} steps — repeated same action, too much friction`
+          frictionPoints.push(reason)
+          console.log(`    ✗ Patience bail at step ${steps.length}: ${reason}`)
+          break
+        }
+      }
     }
 
     if (!success && steps.length >= MAX_STEPS) {
       frictionPoints.push(`Reached max step limit (${MAX_STEPS}) without completing task`)
+      console.log(`    ✗ Hit max step limit (${MAX_STEPS}) — task not completed`)
     }
   } finally {
     await browser.close()
@@ -127,7 +139,8 @@ export async function runSimulation(
 async function extractPageElements(page: any): Promise<string> {
   return page.evaluate(() => {
     const lines: string[] = []
-    document.querySelectorAll('input, button, select, textarea').forEach((el: any) => {
+    // Include a[id] so nav/action links (e.g. #nav-pricing, #pricing-link) are visible to the agent
+    document.querySelectorAll('input, button, select, textarea, a[id]').forEach((el: any) => {
       const tag = el.tagName.toLowerCase()
       const id = el.id ? `#${el.id}` : ''
       // getAttribute returns only explicitly-set attributes; el.type includes browser defaults (e.g. buttons default to "submit")
@@ -137,8 +150,10 @@ async function extractPageElements(page: any): Promise<string> {
       const placeholder = el.placeholder ? ` — "${el.placeholder}"` : ''
       const dateHint = typeAttr === 'date' ? ' — format: YYYY-MM-DD (e.g. 1990-01-15)' : ''
       const text = el.textContent?.trim()
+      // Always show text content for clickable elements so the agent understands what they do
+      const clickText = (tag === 'a' || tag === 'button') && text ? ` "${text}"` : ''
       const label = id || name
-        ? `${tag}${id}${type}${name}${placeholder}${dateHint}`
+        ? `${tag}${id}${type}${name}${placeholder}${dateHint}${clickText}`
         : `${tag}${type} "${text}"`
       if (label.trim()) lines.push(label)
     })

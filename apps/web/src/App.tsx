@@ -18,12 +18,27 @@ interface PersonaResult {
   variantB: { success: boolean; steps: number; timeMs: number } | null
 }
 
+interface TaskStats {
+  taskId: string
+  taskGoal: string
+  A: VariantStats
+  B: VariantStats
+  personaResults: PersonaResult[]
+  winner: 'A' | 'B' | 'tie' | null
+}
+
 interface Summary {
   runCount: number
   lastUpdated: number
   variants: { A: VariantStats; B: VariantStats }
   personaResults: PersonaResult[]
   winner: 'A' | 'B' | 'tie' | null
+  tasks: Record<string, TaskStats>
+}
+
+const TASK_LABELS: Record<string, string> = {
+  'create-account': 'Create Account',
+  'find-pricing': 'Find Pricing',
 }
 
 function MetricCard({
@@ -132,77 +147,39 @@ export default function App() {
   )
 }
 
-function Dashboard({ summary }: { summary: Summary }) {
-  const { A, B } = summary.variants
+function WinnerBanner({ winner, A, B }: { winner: Summary['winner']; A: VariantStats; B: VariantStats }) {
+  if (!winner) return null
+  return (
+    <div className={`rounded-xl p-5 mb-6 border ${
+      winner === 'A' ? 'bg-indigo-950/60 border-indigo-600'
+      : winner === 'B' ? 'bg-orange-950/60 border-orange-600'
+      : 'bg-gray-800 border-gray-700'
+    }`}>
+      <div className="text-lg font-bold">
+        {winner === 'tie' ? '🤝 Tie — both variants performed similarly' : `🏆 Variant ${winner} wins`}
+      </div>
+      {winner !== 'tie' && (
+        <div className="text-gray-300 text-sm mt-1">
+          {winner === 'A'
+            ? `${Math.round((A.successRate - B.successRate) * 100)}pp higher success rate · ${(B.avgStepCount - A.avgStepCount).toFixed(1)} fewer steps on average`
+            : `${Math.round((B.successRate - A.successRate) * 100)}pp higher success rate · ${(A.avgStepCount - B.avgStepCount).toFixed(1)} fewer steps on average`}
+        </div>
+      )}
+    </div>
+  )
+}
 
-  const chartData = [
-    {
-      name: 'Success Rate',
-      A: Math.round(A.successRate * 100),
-      B: Math.round(B.successRate * 100),
-    },
-  ]
-
-  const stepsData = [
-    {
-      name: 'Avg Steps',
-      A: Math.round(A.avgStepCount * 10) / 10,
-      B: Math.round(B.avgStepCount * 10) / 10,
-    },
-  ]
+function TaskView({ A, B, personaResults }: { A: VariantStats; B: VariantStats; personaResults: PersonaResult[] }) {
+  const chartData = [{ name: 'Success Rate', A: Math.round(A.successRate * 100), B: Math.round(B.successRate * 100) }]
 
   return (
     <>
-      {/* Winner Banner */}
-      {summary.winner && (
-        <div className={`rounded-xl p-5 mb-8 border ${
-          summary.winner === 'A'
-            ? 'bg-indigo-950/60 border-indigo-600'
-            : summary.winner === 'B'
-            ? 'bg-orange-950/60 border-orange-600'
-            : 'bg-gray-800 border-gray-700'
-        }`}>
-          <div className="text-lg font-bold">
-            {summary.winner === 'tie'
-              ? '🤝 Tie — both variants performed similarly'
-              : `🏆 Variant ${summary.winner} wins`}
-          </div>
-          {summary.winner !== 'tie' && (
-            <div className="text-gray-300 text-sm mt-1">
-              {summary.winner === 'A'
-                ? `${Math.round((A.successRate - B.successRate) * 100)}pp higher success rate · ${(B.avgStepCount - A.avgStepCount).toFixed(1)} fewer steps on average`
-                : `${Math.round((B.successRate - A.successRate) * 100)}pp higher success rate · ${(A.avgStepCount - B.avgStepCount).toFixed(1)} fewer steps on average`}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Metric Cards */}
       <div className="grid grid-cols-3 gap-4 mb-6">
-        <MetricCard
-          label="Success Rate"
-          aValue={Math.round(A.successRate * 100)}
-          bValue={Math.round(B.successRate * 100)}
-          format={v => `${v}%`}
-          higherIsBetter
-        />
-        <MetricCard
-          label="Avg Completion Time"
-          aValue={A.avgCompletionTimeMs}
-          bValue={B.avgCompletionTimeMs}
-          format={v => `${(v / 1000).toFixed(1)}s`}
-          higherIsBetter={false}
-        />
-        <MetricCard
-          label="Avg Steps to Complete"
-          aValue={A.avgStepCount}
-          bValue={B.avgStepCount}
-          format={v => v.toFixed(1)}
-          higherIsBetter={false}
-        />
+        <MetricCard label="Success Rate" aValue={Math.round(A.successRate * 100)} bValue={Math.round(B.successRate * 100)} format={v => `${v}%`} higherIsBetter />
+        <MetricCard label="Avg Completion Time" aValue={A.avgCompletionTimeMs} bValue={B.avgCompletionTimeMs} format={v => `${(v / 1000).toFixed(1)}s`} higherIsBetter={false} />
+        <MetricCard label="Avg Steps to Complete" aValue={A.avgStepCount} bValue={B.avgStepCount} format={v => v.toFixed(1)} higherIsBetter={false} />
       </div>
 
-      {/* Charts + Friction */}
       <div className="grid grid-cols-2 gap-5 mb-6">
         <div className="bg-gray-900 rounded-xl p-5">
           <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Success Rate</div>
@@ -210,10 +187,7 @@ function Dashboard({ summary }: { summary: Summary }) {
             <BarChart data={chartData} barCategoryGap="40%">
               <XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 12 }} axisLine={false} tickLine={false} />
               <YAxis domain={[0, 100]} tick={{ fill: '#6b7280', fontSize: 11 }} tickFormatter={v => `${v}%`} axisLine={false} tickLine={false} />
-              <Tooltip
-                formatter={(v: number) => `${v}%`}
-                contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8 }}
-              />
+              <Tooltip formatter={(v: number) => `${v}%`} contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8 }} />
               <Legend />
               <Bar dataKey="A" fill="#6366f1" radius={[4, 4, 0, 0]} />
               <Bar dataKey="B" fill="#f97316" radius={[4, 4, 0, 0]} />
@@ -222,9 +196,7 @@ function Dashboard({ summary }: { summary: Summary }) {
         </div>
 
         <div className="bg-gray-900 rounded-xl p-5">
-          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">
-            Top Friction Points — Variant B
-          </div>
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Top Friction Points — Variant B</div>
           {B.topFrictionPoints.length === 0 ? (
             <p className="text-gray-600 text-sm">No friction points recorded</p>
           ) : (
@@ -240,7 +212,6 @@ function Dashboard({ summary }: { summary: Summary }) {
         </div>
       </div>
 
-      {/* Persona Table */}
       <div className="bg-gray-900 rounded-xl p-5">
         <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Results by Persona</div>
         <table className="w-full text-sm">
@@ -253,9 +224,9 @@ function Dashboard({ summary }: { summary: Summary }) {
             </tr>
           </thead>
           <tbody>
-            {summary.personaResults.map((pr, i) => (
+            {personaResults.map((pr, i) => (
               <tr key={i} className="border-t border-gray-800">
-                <td className="py-3 text-gray-200 font-medium">{pr.personaName}</td>
+                <td className="py-3 text-gray-200 font-medium whitespace-nowrap pr-4">{pr.personaName}</td>
                 <td className="py-3">
                   {pr.variantA ? (
                     <span className={pr.variantA.success ? 'text-green-400' : 'text-red-400'}>
@@ -274,8 +245,8 @@ function Dashboard({ summary }: { summary: Summary }) {
                 </td>
                 <td className="py-3 text-xs text-gray-500">
                   {pr.variantA && pr.variantB
-                    ? pr.variantA.success && !pr.variantB.success ? '🔵 A only succeeded'
-                    : !pr.variantA.success && pr.variantB.success ? '🟠 B only succeeded'
+                    ? pr.variantA.success && !pr.variantB.success ? '🔵 A only'
+                    : !pr.variantA.success && pr.variantB.success ? '🟠 B only'
                     : pr.variantA.success && pr.variantB.success
                       ? pr.variantA.steps < pr.variantB.steps ? '🔵 A faster'
                       : pr.variantB.steps < pr.variantA.steps ? '🟠 B faster' : 'Equal'
@@ -286,13 +257,48 @@ function Dashboard({ summary }: { summary: Summary }) {
             ))}
           </tbody>
         </table>
-
-        {/* Run counts */}
         <div className="mt-4 pt-4 border-t border-gray-800 flex gap-6 text-xs text-gray-600">
           <span>Variant A: {A.runs} run{A.runs !== 1 ? 's' : ''}</span>
           <span>Variant B: {B.runs} run{B.runs !== 1 ? 's' : ''}</span>
         </div>
       </div>
+    </>
+  )
+}
+
+function Dashboard({ summary }: { summary: Summary }) {
+  const taskIds = Object.keys(summary.tasks ?? {})
+  const [activeTask, setActiveTask] = useState<string>(taskIds[0] ?? '')
+
+  const taskData = summary.tasks?.[activeTask]
+  const A = taskData?.A ?? summary.variants.A
+  const B = taskData?.B ?? summary.variants.B
+  const personaResults = taskData?.personaResults ?? summary.personaResults
+  const winner = taskData?.winner ?? summary.winner
+
+  return (
+    <>
+      {/* Task Tabs */}
+      {taskIds.length > 1 && (
+        <div className="flex gap-2 mb-6">
+          {taskIds.map(id => (
+            <button
+              key={id}
+              onClick={() => setActiveTask(id)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                activeTask === id
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
+              }`}
+            >
+              {TASK_LABELS[id] ?? id}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <WinnerBanner winner={winner} A={A} B={B} />
+      <TaskView A={A} B={B} personaResults={personaResults} />
     </>
   )
 }

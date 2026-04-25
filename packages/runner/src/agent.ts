@@ -28,9 +28,10 @@ export async function decideAction(
 
 PERSONA: ${persona.name}
 - Behavior: ${persona.description}
-- Patience: ${patienceLabel} (${persona.patience}/1)
+- Patience: ${patienceLabel} (score: ${persona.patience}/1)
 - Exploration style: ${explorationLabel}
 - Speed: ${persona.speedBias > 0.6 ? 'fast, skips details' : 'slow, reads carefully'}
+- Error tolerance: ${persona.errorTolerance < 0.3 ? 'very low — one obstacle = give up' : persona.errorTolerance > 0.6 ? 'high — keeps trying through errors' : 'moderate'}
 
 TASK GOAL: ${task.goal}
 SUCCESS CONDITION: ${task.successCondition}
@@ -55,7 +56,9 @@ Rules:
 - ALWAYS use selectors from the INTERACTIVE ELEMENTS list above — never guess attribute names
 - If you see a success/confirmation screen, respond with "done"
 - If there is a blocking overlay or cookie banner, click its dismiss/accept button first
-- If impatient persona and stuck for 3+ steps, use "fail" rather than keep trying`
+- If you cannot find the target, scroll down to check below the fold before concluding the task is impossible
+- If impatient persona (patience < 0.4) and stuck for 3+ steps, use "fail" rather than keep trying
+- If extremely impatient persona (patience < 0.2) and stuck for 2+ steps, use "fail" immediately`
 
   try {
     const response = await client.chat.completions.create({
@@ -79,6 +82,12 @@ Rules:
     })
 
     const raw = response.choices[0]?.message?.content?.trim() ?? ''
+    if (!raw) {
+      console.error('[Agent] Empty response from API')
+      const fallback = fallbackAction(task, url, pageText, previousSteps)
+      console.warn('[Agent] Falling back to deterministic action:', fallback.reason)
+      return fallback
+    }
     const text = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
     try {
       return JSON.parse(text) as Action

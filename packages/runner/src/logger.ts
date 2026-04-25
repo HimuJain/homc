@@ -1,6 +1,6 @@
 import * as fs from 'fs'
 import * as path from 'path'
-import type { RunResult, Summary, VariantStats, PersonaResult } from '@homc/shared'
+import type { RunResult, Summary, VariantStats, PersonaResult, TaskStats } from '@homc/shared'
 
 const LOGS_DIR = path.join(__dirname, '..', '..', '..', 'logs')
 
@@ -74,12 +74,46 @@ function buildSummary(results: RunResult[]): Summary {
     }
   })
 
+  // Per-task breakdown
+  const taskIds = [...new Set(results.map(r => r.task.id))]
+  const tasks: Record<string, TaskStats> = {}
+  for (const taskId of taskIds) {
+    const tr = results.filter(r => r.task.id === taskId)
+    const trA = tr.filter(r => r.variant === 'A')
+    const trB = tr.filter(r => r.variant === 'B')
+    const tsA = computeStats(trA)
+    const tsB = computeStats(trB)
+    const tdiff = tsA.successRate - tsB.successRate
+    const tWinner: Summary['winner'] = trA.length > 0 && trB.length > 0
+      ? (Math.abs(tdiff) < 0.1 ? 'tie' : tdiff > 0 ? 'A' : 'B')
+      : null
+    const tPersonaNames = [...new Set(tr.map(r => r.persona.name))]
+    const tPersonaResults: PersonaResult[] = tPersonaNames.map(name => {
+      const aRun = trA.find(r => r.persona.name === name)
+      const bRun = trB.find(r => r.persona.name === name)
+      return {
+        personaName: name,
+        variantA: aRun ? { success: aRun.success, steps: aRun.metrics.stepCount, timeMs: aRun.metrics.completionTimeMs } : null,
+        variantB: bRun ? { success: bRun.success, steps: bRun.metrics.stepCount, timeMs: bRun.metrics.completionTimeMs } : null,
+      }
+    })
+    tasks[taskId] = {
+      taskId,
+      taskGoal: tr[0].task.goal,
+      A: tsA,
+      B: tsB,
+      personaResults: tPersonaResults,
+      winner: tWinner,
+    }
+  }
+
   return {
     runCount: results.length,
     lastUpdated: Date.now(),
     variants: { A: aStats, B: bStats },
     personaResults,
     winner,
+    tasks,
   }
 }
 

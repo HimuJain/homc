@@ -57,7 +57,7 @@
     </div>
   </nav>
 
-  <div id="pricing-section">
+  <div id="pricing-section" style="display:block">
     <div class="pricing-wrap">
       <h2>ShopEase Member Plans</h2>
       <p class="pricing-desc">Join thousands of smart shoppers saving more every day.</p>
@@ -125,8 +125,7 @@
   <script>
     document.getElementById('nav-pricing').addEventListener('click', function (e) {
       e.preventDefault()
-      const section = document.getElementById('pricing-section')
-      section.style.display = section.style.display === 'none' ? 'block' : 'none'
+      document.getElementById('pricing-section').scrollIntoView({ behavior: 'smooth' })
     })
 
     document.getElementById('signup-form').addEventListener('submit', function (e) {

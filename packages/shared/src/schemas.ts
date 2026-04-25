@@ -81,10 +81,20 @@ export interface PersonaResult {
   variantB: { success: boolean; steps: number; timeMs: number } | null
 }
 
+export interface TaskStats {
+  taskId: string
+  taskGoal: string
+  A: VariantStats
+  B: VariantStats
+  personaResults: PersonaResult[]
+  winner: 'A' | 'B' | 'tie' | null
+}
+
 export interface Summary {
   runCount: number
   lastUpdated: number
   variants: { A: VariantStats; B: VariantStats }
   personaResults: PersonaResult[]
   winner: 'A' | 'B' | 'tie' | null
+  tasks: Record<string, TaskStats>
 }
