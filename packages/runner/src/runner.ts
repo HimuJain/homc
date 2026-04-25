@@ -1,5 +1,5 @@
 import { chromium } from 'playwright'
-import type { Persona, Task, RunResult, Step } from '@homc/shared'
+import type { Persona, Task, RunResult, Step, TaskHistoryEntry } from '@homc/shared'
 import { computeMetrics } from '@homc/eval'
 import { decideAction } from './agent'
 import { writeRunResult } from './logger'
@@ -41,11 +41,20 @@ export async function runSimulation(
   variant: 'A' | 'B',
   persona: Persona,
   task: Task,
+  allTasks: Task[],
 ): Promise<RunResult> {
   console.log(`  → Variant ${variant} | ${persona.name}`)
 
   const browser = await chromium.launch({ headless: true })
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
+
+  const originalTask = task
+  let currentTask = task
+  const taskStack: Task[] = []
+  const taskHistory: TaskHistoryEntry[] = [
+    { stepNumber: 0, taskId: task.id, taskGoal: task.goal, trigger: 'primary' }
+  ]
+  const resolvedTasks = new Map<string, boolean>()
 
   const startedAt = Date.now()
   const steps: Step[] = []
@@ -62,31 +71,80 @@ export async function runSimulation(
       const pageText = await page.locator('body').innerText().catch(() => '')
       const pageElements = await extractPageElements(page)
 
-      // Deterministic check first — never rely solely on LLM judgment.
-      if (isSuccessDeterministic(task.id, pageText)) {
-        success = true
-        console.log(`    ✓ Done at step ${i + 1}: success text confirmed on page`)
-        break
-      }
-
-      const action = await decideAction(persona, task, screenshot, url, pageText, pageElements, steps)
-
-      if (action.type === 'done') {
-        if (isSuccessDeterministic(task.id, pageText)) {
-          success = true
-          console.log(`    ✓ Done at step ${i + 1}: ${action.reason}`)
-        } else {
-          console.log(`    ⚠ Agent claimed done but no success text found — marking failed`)
+      // Success check for current task
+      if (isSuccessDeterministic(currentTask.id, pageText)) {
+        resolvedTasks.set(currentTask.id, true)
+        setLastOutcome(taskHistory, currentTask.id, 'success')
+        console.log(`    ✓ Completed ${currentTask.id} at step ${i + 1}`)
+        if (taskStack.length > 0) {
+          currentTask = taskStack.pop()!
+          taskHistory.push({ stepNumber: i + 1, taskId: currentTask.id, taskGoal: currentTask.goal, trigger: 'return' })
+          continue
         }
         break
       }
 
-      if (action.type === 'fail') {
-        frictionPoints.push(action.reason)
-        console.log(`    ✗ Failed at step ${i + 1}: ${action.reason}`)
+      // Chaos check - may switch to a different task
+      const tasksInPlay = new Set([currentTask.id, ...taskStack.map(t => t.id)])
+      const available = allTasks.filter(t => !tasksInPlay.has(t.id) && !resolvedTasks.has(t.id))
+      if (available.length > 0 && Math.random() < persona.chaosRate) {
+        const chaosTask = available[Math.floor(Math.random() * available.length)]
+        console.log(`    ↳ Chaos at step ${i + 1}: ${currentTask.id} → ${chaosTask.id}`)
+        frictionPoints.push(`Chaos distraction at step ${i + 1}: switched from ${currentTask.id} to ${chaosTask.id}`)
+        taskStack.push(currentTask)
+        currentTask = chaosTask
+        taskHistory.push({ stepNumber: i + 1, taskId: chaosTask.id, taskGoal: chaosTask.goal, trigger: 'chaos' })
+        // Immediate success check for new task on current page
+        if (isSuccessDeterministic(currentTask.id, pageText)) {
+          resolvedTasks.set(currentTask.id, true)
+          setLastOutcome(taskHistory, currentTask.id, 'success')
+          console.log(`    ✓ Completed ${currentTask.id} at step ${i + 1} (immediate)`)
+          currentTask = taskStack.pop()!
+          taskHistory.push({ stepNumber: i + 1, taskId: currentTask.id, taskGoal: currentTask.goal, trigger: 'return' })
+          continue
+        }
+      }
+
+      // Decide action (pass originalTask context when in chaos state)
+      const inChaosState = taskStack.length > 0
+      const action = await decideAction(
+        persona, currentTask, screenshot, url, pageText, pageElements, steps,
+        inChaosState ? originalTask : undefined,
+        inChaosState ? persona.distractionDepth : undefined,
+      )
+
+      // Handle done
+      if (action.type === 'done') {
+        if (isSuccessDeterministic(currentTask.id, pageText)) {
+          resolvedTasks.set(currentTask.id, true)
+          setLastOutcome(taskHistory, currentTask.id, 'success')
+          console.log(`    ✓ Done at step ${i + 1}: ${action.reason}`)
+        } else {
+          console.log(`    ⚠ Agent claimed done but no success text found — continuing`)
+        }
+        if (taskStack.length > 0) {
+          currentTask = taskStack.pop()!
+          taskHistory.push({ stepNumber: i + 1, taskId: currentTask.id, taskGoal: currentTask.goal, trigger: 'return' })
+          continue
+        }
         break
       }
 
+      // Handle fail
+      if (action.type === 'fail') {
+        resolvedTasks.set(currentTask.id, false)
+        setLastOutcome(taskHistory, currentTask.id, 'fail')
+        frictionPoints.push(action.reason)
+        console.log(`    ✗ Failed ${currentTask.id} at step ${i + 1}: ${action.reason}`)
+        if (taskStack.length > 0) {
+          currentTask = taskStack.pop()!
+          taskHistory.push({ stepNumber: i + 1, taskId: currentTask.id, taskGoal: currentTask.goal, trigger: 'return' })
+          continue
+        }
+        break
+      }
+
+      // Execute action
       try {
         await executeAction(page, action)
       } catch (err) {
@@ -103,35 +161,65 @@ export async function runSimulation(
         durationMs: Date.now() - stepStart,
       })
 
-      // Programmatic bail for very impatient personas: if same action repeated 3 times, they give up
+      // Patience bail for very impatient personas
       if (persona.patience < 0.25 && steps.length >= 3) {
         const last3 = steps.slice(-3).map(s => JSON.stringify(s.action))
         if (last3[0] === last3[1] && last3[1] === last3[2]) {
-          const reason = `Gave up after ${steps.length} steps — repeated same action, too much friction`
+          const reason = `Gave up after ${steps.length} steps — repeated same action`
           frictionPoints.push(reason)
+          resolvedTasks.set(currentTask.id, false)
+          setLastOutcome(taskHistory, currentTask.id, 'fail')
           console.log(`    ✗ Patience bail at step ${steps.length}: ${reason}`)
+          if (taskStack.length > 0) {
+            currentTask = taskStack.pop()!
+            taskHistory.push({ stepNumber: steps.length, taskId: currentTask.id, taskGoal: currentTask.goal, trigger: 'return' })
+          }
           break
         }
       }
     }
 
-    if (!success && steps.length >= MAX_STEPS) {
+    // Post-loop: mark anything still unresolved
+    if (!resolvedTasks.has(currentTask.id)) {
+      resolvedTasks.set(currentTask.id, false)
+      setLastOutcome(taskHistory, currentTask.id, 'incomplete')
       frictionPoints.push(`Reached max step limit (${MAX_STEPS}) without completing task`)
       console.log(`    ✗ Hit max step limit (${MAX_STEPS}) — task not completed`)
     }
+    for (const t of taskStack) {
+      if (!resolvedTasks.has(t.id)) {
+        resolvedTasks.set(t.id, false)
+        setLastOutcome(taskHistory, t.id, 'incomplete')
+      }
+    }
+
   } finally {
     await browser.close()
   }
 
   const endedAt = Date.now()
+  success = resolvedTasks.get(originalTask.id) === true
+
+  // Calculate successScore
+  const primaryWeight = Math.max(0, 0.95 - persona.chaosRate * persona.distractionDepth)
+  const chaosIds = [...new Set(taskHistory.map(e => e.taskId).filter(id => id !== originalTask.id))]
+  const chaosAttempted = chaosIds.length
+  const chaosCompleted = chaosIds.filter(id => resolvedTasks.get(id) === true).length
+  const chaosScore = chaosAttempted > 0 ? chaosCompleted / chaosAttempted : 0
+  const successScore = Math.max(0, Math.min(1,
+    primaryWeight * (success ? 1 : 0) + (1 - primaryWeight) * chaosScore
+  ))
+
   const metrics = computeMetrics(steps, success, endedAt - startedAt)
 
   const result: RunResult = {
     id: crypto.randomUUID(),
     variant,
     persona,
-    task,
+    task: originalTask,
     success,
+    successScore,
+    taskHistory,
     steps,
     metrics,
     startedAt,
@@ -141,6 +229,19 @@ export async function runSimulation(
 
   await writeRunResult(result)
   return result
+}
+
+function setLastOutcome(
+  history: TaskHistoryEntry[],
+  taskId: string,
+  outcome: 'success' | 'fail' | 'incomplete',
+): void {
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].taskId === taskId) {
+      history[i].outcome = outcome
+      return
+    }
+  }
 }
 
 async function extractPageElements(page: any): Promise<string> {

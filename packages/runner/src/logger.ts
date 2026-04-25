@@ -1,6 +1,6 @@
 import * as fs from 'fs'
 import * as path from 'path'
-import type { RunResult, Summary, VariantStats, PersonaResult, TaskStats } from '@homc/shared'
+import type { RunResult, Summary, VariantStats, PersonaResult, TaskStats, TaskHistoryEntry } from '@homc/shared'
 
 const LOGS_DIR = path.join(__dirname, '..', '..', '..', 'logs')
 
@@ -34,7 +34,7 @@ function buildSummary(results: RunResult[]): Summary {
     if (runs.length === 0) {
       return { runs: 0, successRate: 0, avgCompletionTimeMs: 0, avgStepCount: 0, avgClickCount: 0, topFrictionPoints: [] }
     }
-    const successCount = runs.filter(r => r.success).length
+    const avgSuccessScore = runs.reduce((s, r) => s + r.successScore, 0) / runs.length
     const fpCount: Record<string, number> = {}
     runs.flatMap(r => r.frictionPoints).forEach(fp => {
       fpCount[fp] = (fpCount[fp] ?? 0) + 1
@@ -46,7 +46,7 @@ function buildSummary(results: RunResult[]): Summary {
 
     return {
       runs: runs.length,
-      successRate: successCount / runs.length,
+      successRate: avgSuccessScore,
       avgCompletionTimeMs: avg(runs.map(r => r.metrics.completionTimeMs)),
       avgStepCount: avg(runs.map(r => r.metrics.stepCount)),
       avgClickCount: avg(runs.map(r => r.metrics.clickCount)),
@@ -69,8 +69,20 @@ function buildSummary(results: RunResult[]): Summary {
     const bRun = bResults.find(r => r.persona.name === name)
     return {
       personaName: name,
-      variantA: aRun ? { success: aRun.success, steps: aRun.metrics.stepCount, timeMs: aRun.metrics.completionTimeMs } : null,
-      variantB: bRun ? { success: bRun.success, steps: bRun.metrics.stepCount, timeMs: bRun.metrics.completionTimeMs } : null,
+      variantA: aRun ? {
+        success: aRun.success,
+        successScore: aRun.successScore,
+        steps: aRun.metrics.stepCount,
+        timeMs: aRun.metrics.completionTimeMs,
+        taskDrift: buildTaskDrift(aRun.taskHistory),
+      } : null,
+      variantB: bRun ? {
+        success: bRun.success,
+        successScore: bRun.successScore,
+        steps: bRun.metrics.stepCount,
+        timeMs: bRun.metrics.completionTimeMs,
+        taskDrift: buildTaskDrift(bRun.taskHistory),
+      } : null,
     }
   })
 
@@ -93,8 +105,20 @@ function buildSummary(results: RunResult[]): Summary {
       const bRun = trB.find(r => r.persona.name === name)
       return {
         personaName: name,
-        variantA: aRun ? { success: aRun.success, steps: aRun.metrics.stepCount, timeMs: aRun.metrics.completionTimeMs } : null,
-        variantB: bRun ? { success: bRun.success, steps: bRun.metrics.stepCount, timeMs: bRun.metrics.completionTimeMs } : null,
+        variantA: aRun ? {
+          success: aRun.success,
+          successScore: aRun.successScore,
+          steps: aRun.metrics.stepCount,
+          timeMs: aRun.metrics.completionTimeMs,
+          taskDrift: buildTaskDrift(aRun.taskHistory),
+        } : null,
+        variantB: bRun ? {
+          success: bRun.success,
+          successScore: bRun.successScore,
+          steps: bRun.metrics.stepCount,
+          timeMs: bRun.metrics.completionTimeMs,
+          taskDrift: buildTaskDrift(bRun.taskHistory),
+        } : null,
       }
     })
     tasks[taskId] = {
@@ -118,3 +142,19 @@ function buildSummary(results: RunResult[]): Summary {
 }
 
 const avg = (nums: number[]) => nums.reduce((a, b) => a + b, 0) / nums.length
+
+const TASK_SHORT: Record<string, string> = {
+  'create-account': 'signup',
+  'find-pricing': 'pricing',
+  'learn-about-company': 'about',
+}
+
+function buildTaskDrift(history: TaskHistoryEntry[]): string {
+  if (!history || history.length <= 1) return ''
+  return history.map(e => {
+    const name = TASK_SHORT[e.taskId] ?? e.taskId
+    const oc = e.outcome === 'success' ? ' ✓' : e.outcome === 'fail' ? ' ✗' : e.outcome === 'incomplete' ? ' …' : ''
+    const prefix = e.trigger === 'chaos' ? '[chaos] ' : e.trigger === 'return' ? '[return] ' : ''
+    return `${prefix}${name}${oc}`
+  }).join(' → ')
+}

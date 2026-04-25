@@ -15,6 +15,8 @@ export async function decideAction(
   pageText: string,
   pageElements: string,
   previousSteps: Step[],
+  originalTask?: Task,
+  distractionDepth?: number,
 ): Promise<Action> {
   const recentHistory = previousSteps
     .slice(-5)
@@ -23,6 +25,19 @@ export async function decideAction(
 
   const patienceLabel = persona.patience < 0.4 ? 'impatient' : persona.patience > 0.7 ? 'patient' : 'moderately patient'
   const explorationLabel = persona.explorationDepth > 0.6 ? 'explores thoroughly' : 'sticks to obvious paths'
+
+  // Build chaos context when in a distracted state
+  let chaosContext = ''
+  if (originalTask && distractionDepth !== undefined) {
+    if (distractionDepth <= 0.5) {
+      chaosContext = `\nBACKGROUND TASK (you still plan to complete this after): ${originalTask.goal}`
+    } else if (distractionDepth <= 0.75) {
+      chaosContext = `\nSECONDARY GOAL (return to this after current task resolves): ${originalTask.goal}`
+    }
+    // distractionDepth > 0.75: no mention of original task
+  }
+
+  const chaosRule = originalTask ? '\n- You got distracted from another task. Complete your CURRENT TASK GOAL first, then you will return.' : ''
 
   const prompt = `You are simulating a real user interacting with a web page to complete a task.
 
@@ -33,7 +48,7 @@ PERSONA: ${persona.name}
 - Speed: ${persona.speedBias > 0.6 ? 'fast, skips details' : 'slow, reads carefully'}
 - Error tolerance: ${persona.errorTolerance < 0.3 ? 'very low — one obstacle = give up' : persona.errorTolerance > 0.6 ? 'high — keeps trying through errors' : 'moderate'}
 
-TASK GOAL: ${task.goal}
+TASK GOAL: ${task.goal}${chaosContext}
 SUCCESS CONDITION: ${task.successCondition}
 CURRENT URL: ${url}
 
@@ -58,7 +73,7 @@ Rules:
 - If there is a blocking overlay or cookie banner, click its dismiss/accept button first
 - If you cannot find the target, scroll down to check below the fold before concluding the task is impossible
 - If impatient persona (patience < 0.4) and stuck for 3+ steps, use "fail" rather than keep trying
-- If extremely impatient persona (patience < 0.2) and stuck for 2+ steps, use "fail" immediately`
+- If extremely impatient persona (patience < 0.2) and stuck for 2+ steps, use "fail" immediately${chaosRule}`
 
   try {
     const response = await client.chat.completions.create({
@@ -84,7 +99,7 @@ Rules:
     const raw = response.choices[0]?.message?.content?.trim() ?? ''
     if (!raw) {
       console.error('[Agent] Empty response from API')
-      const fallback = fallbackAction(task, url, pageText, previousSteps)
+      const fallback = fallbackAction(task, url, pageText, previousSteps, originalTask, distractionDepth)
       console.warn('[Agent] Falling back to deterministic action:', fallback.reason)
       return fallback
     }
@@ -93,19 +108,19 @@ Rules:
       return JSON.parse(text) as Action
     } catch {
       console.error('[Agent] JSON parse failed. Raw response:', raw)
-      const fallback = fallbackAction(task, url, pageText, previousSteps)
+      const fallback = fallbackAction(task, url, pageText, previousSteps, originalTask, distractionDepth)
       console.warn('[Agent] Falling back to deterministic action:', fallback.reason)
       return fallback
     }
   } catch (err) {
     console.error('[Agent] API call failed:', (err as Error).message)
-    const fallback = fallbackAction(task, url, pageText, previousSteps)
+    const fallback = fallbackAction(task, url, pageText, previousSteps, originalTask, distractionDepth)
     console.warn('[Agent] Falling back to deterministic action:', fallback.reason)
     return fallback
   }
 }
 
-function fallbackAction(task: Task, url: string, pageText: string, previousSteps: Step[]): Action {
+function fallbackAction(task: Task, url: string, pageText: string, previousSteps: Step[], originalTask?: Task, distractionDepth?: number): Action {
   const text = pageText.toLowerCase()
   const filledSelectors = new Set(
     previousSteps.flatMap(s => (s.action.type === 'fill' ? [s.action.selector] : [])),

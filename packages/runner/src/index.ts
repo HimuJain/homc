@@ -22,7 +22,7 @@ async function main() {
     for (const variant of VARIANTS) {
       console.log(`\n[Variant ${variant}]`)
       for (const persona of SELECTED_PERSONAS) {
-        const result = await runSimulation(variant, persona, task)
+        const result = await runSimulation(variant, persona, task, SELECTED_TASKS)
         results.push(result)
       }
     }
@@ -31,9 +31,9 @@ async function main() {
   console.log('\n=== Simulation Complete ===')
   for (const task of SELECTED_TASKS) {
     const taskResults = results.filter(r => r.task.id === task.id)
-    const aRate = taskResults.filter(r => r.variant === 'A' && r.success).length / SELECTED_PERSONAS.length
-    const bRate = taskResults.filter(r => r.variant === 'B' && r.success).length / SELECTED_PERSONAS.length
-    console.log(`[${task.id}] A: ${Math.round(aRate * 100)}% | B: ${Math.round(bRate * 100)}%`)
+    const aScore = taskResults.filter(r => r.variant === 'A').reduce((s, r) => s + r.successScore, 0) / SELECTED_PERSONAS.length
+    const bScore = taskResults.filter(r => r.variant === 'B').reduce((s, r) => s + r.successScore, 0) / SELECTED_PERSONAS.length
+    console.log(`[${task.id}] A: ${Math.round(aScore * 100)}% | B: ${Math.round(bScore * 100)}%`)
   }
   console.log(`\nLogs written to /logs. Open the dashboard to see full results.`)
 }

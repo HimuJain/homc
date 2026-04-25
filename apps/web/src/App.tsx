@@ -14,8 +14,8 @@ interface VariantStats {
 
 interface PersonaResult {
   personaName: string
-  variantA: { success: boolean; steps: number; timeMs: number } | null
-  variantB: { success: boolean; steps: number; timeMs: number } | null
+  variantA: { success: boolean; successScore: number; steps: number; timeMs: number; taskDrift: string } | null
+  variantB: { success: boolean; successScore: number; steps: number; timeMs: number; taskDrift: string } | null
 }
 
 interface TaskStats {
@@ -176,7 +176,7 @@ function TaskView({ A, B, personaResults }: { A: VariantStats; B: VariantStats; 
   return (
     <>
       <div className="grid grid-cols-3 gap-4 mb-6">
-        <MetricCard label="Success Rate" aValue={Math.round(A.successRate * 100)} bValue={Math.round(B.successRate * 100)} format={v => `${v}%`} higherIsBetter />
+        <MetricCard label="Avg Score" aValue={Math.round(A.successRate * 100)} bValue={Math.round(B.successRate * 100)} format={v => `${v}%`} higherIsBetter />
         <MetricCard label="Avg Completion Time" aValue={A.avgCompletionTimeMs} bValue={B.avgCompletionTimeMs} format={v => `${(v / 1000).toFixed(1)}s`} higherIsBetter={false} />
         <MetricCard label="Avg Steps to Complete" aValue={A.avgStepCount} bValue={B.avgStepCount} format={v => v.toFixed(1)} higherIsBetter={false} />
       </div>
@@ -221,7 +221,7 @@ function TaskView({ A, B, personaResults }: { A: VariantStats; B: VariantStats; 
               <th className="text-gray-500 font-medium pb-3">Persona</th>
               <th className="text-indigo-400 font-medium pb-3">Variant A</th>
               <th className="text-orange-400 font-medium pb-3">Variant B</th>
-              <th className="text-gray-500 font-medium pb-3">Verdict</th>
+              <th className="text-gray-500 font-medium pb-3">Task Drift</th>
             </tr>
           </thead>
           <tbody>
@@ -230,29 +230,26 @@ function TaskView({ A, B, personaResults }: { A: VariantStats; B: VariantStats; 
                 <td className="py-3 text-gray-200 font-medium whitespace-nowrap pr-4">{pr.personaName}</td>
                 <td className="py-3">
                   {pr.variantA ? (
-                    <span className={pr.variantA.success ? 'text-green-400' : 'text-red-400'}>
-                      {pr.variantA.success ? '✓' : '✗'} {pr.variantA.steps} steps
-                      <span className="text-gray-600 ml-1 text-xs">({(pr.variantA.timeMs / 1000).toFixed(1)}s)</span>
-                    </span>
+                    <div>
+                      <span className={`font-mono font-bold ${pr.variantA.successScore >= 0.75 ? 'text-green-400' : pr.variantA.successScore >= 0.4 ? 'text-yellow-400' : 'text-red-400'}`}>
+                        {Math.round(pr.variantA.successScore * 100)}%
+                      </span>
+                      <span className="text-gray-600 ml-1 text-xs">{pr.variantA.steps} steps</span>
+                    </div>
                   ) : <span className="text-gray-700">—</span>}
                 </td>
                 <td className="py-3">
                   {pr.variantB ? (
-                    <span className={pr.variantB.success ? 'text-green-400' : 'text-red-400'}>
-                      {pr.variantB.success ? '✓' : '✗'} {pr.variantB.steps} steps
-                      <span className="text-gray-600 ml-1 text-xs">({(pr.variantB.timeMs / 1000).toFixed(1)}s)</span>
-                    </span>
+                    <div>
+                      <span className={`font-mono font-bold ${pr.variantB.successScore >= 0.75 ? 'text-green-400' : pr.variantB.successScore >= 0.4 ? 'text-yellow-400' : 'text-red-400'}`}>
+                        {Math.round(pr.variantB.successScore * 100)}%
+                      </span>
+                      <span className="text-gray-600 ml-1 text-xs">{pr.variantB.steps} steps</span>
+                    </div>
                   ) : <span className="text-gray-700">—</span>}
                 </td>
-                <td className="py-3 text-xs text-gray-500">
-                  {pr.variantA && pr.variantB
-                    ? pr.variantA.success && !pr.variantB.success ? '🔵 A only'
-                    : !pr.variantA.success && pr.variantB.success ? '🟠 B only'
-                    : pr.variantA.success && pr.variantB.success
-                      ? pr.variantA.steps < pr.variantB.steps ? '🔵 A faster'
-                      : pr.variantB.steps < pr.variantA.steps ? '🟠 B faster' : 'Equal'
-                    : '✗ Both failed'
-                    : '—'}
+                <td className="py-3 text-xs text-gray-500 font-mono max-w-[180px]">
+                  {pr.variantA?.taskDrift || pr.variantB?.taskDrift || '—'}
                 </td>
               </tr>
             ))}
