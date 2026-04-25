@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ShopEase — Member Registration Portal</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #f1f5f9; padding-bottom: 40px; }
+
+    .site-nav { background: #1e293b; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; height: 52px; }
+    .nav-logo { font-size: 18px; font-weight: 800; color: #60a5fa; text-decoration: none; }
+    .nav-links { display: flex; gap: 2px; align-items: center; }
+    .nav-links a { font-size: 12px; color: #94a3b8; text-decoration: none; padding: 7px 14px; border-radius: 4px; }
+    .nav-links a:hover { background: #334155; color: white; }
+    #nav-start { background: #f59e0b; color: #1e293b !important; font-weight: 700; margin-left: 4px; }
+    #nav-portal { color: #e2e8f0 !important; font-weight: 600; }
+
+    .container { max-width: 640px; margin: 32px auto; background: white; padding: 32px; border: 1px solid #cbd5e1; border-radius: 6px; }
+    .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+    .brand-logo { font-size: 18px; font-weight: 800; color: #6366f1; }
+    .brand-tagline { font-size: 10px; color: #94a3b8; border-left: 1px solid #e2e8f0; padding-left: 10px; }
+    h1 { font-size: 18px; color: #1e293b; margin-bottom: 4px; }
+    .page-desc { font-size: 12px; color: #94a3b8; margin-bottom: 24px; }
+
+    .section-header { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #64748b; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin: 20px 0 14px; }
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 12px; color: #334155; margin-bottom: 3px; }
+    .field label .req { color: #dc2626; margin-left: 2px; }
+    .field input, .field select { width: 100%; border: 1px solid #cbd5e1; border-radius: 3px; padding: 9px 10px; font-size: 13px; outline: none; }
+    .field input:focus { border-color: #6366f1; }
+    .field .hint { font-size: 10px; color: #94a3b8; margin-top: 3px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .password-rules { font-size: 10px; color: #94a3b8; background: #f8fafc; padding: 8px 10px; border-left: 3px solid #e2e8f0; margin-top: -10px; margin-bottom: 14px; }
+    .password-rules li { margin-bottom: 2px; }
+
+    .terms { font-size: 11px; color: #475569; margin: 16px 0; line-height: 1.6; }
+    .terms a { color: #6366f1; }
+    .terms-check { display: flex; gap: 8px; align-items: flex-start; }
+    .terms-check input { margin-top: 2px; width: auto; flex-shrink: 0; }
+
+    .submit-section { margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 20px; }
+    #cta { width: 100%; background: #334155; color: white; border: none; padding: 12px; font-size: 13px; cursor: pointer; border-radius: 3px; }
+    #cta:hover { background: #1e293b; }
+    .already { text-align: center; font-size: 11px; color: #94a3b8; margin-top: 10px; }
+    .already a { color: #6366f1; }
+    .required-note { font-size: 10px; color: #94a3b8; margin-bottom: 16px; }
+
+    .error-banner { background: #fff1f2; border: 1px solid #fecdd3; color: #be123c; padding: 10px 14px; font-size: 12px; border-radius: 4px; margin-bottom: 16px; display: none; }
+
+    #success { text-align: center; padding: 40px 20px; }
+    #success .check { font-size: 48px; margin-bottom: 16px; }
+    #success h2 { font-size: 20px; color: #1e293b; margin-bottom: 8px; }
+    #success p { color: #475569; font-size: 13px; }
+  </style>
+</head>
+<body>
+
+  <nav class="site-nav">
+    <a href="variant-b.html" id="nav-home" class="nav-logo">ShopEase</a>
+    <div class="nav-links">
+      <a href="variant-b.html#features" id="nav-explore">Explore</a>
+      <a href="variant-b-about.html" id="nav-resources">Resources</a>
+      <a href="variant-b-signup.html" id="nav-portal">Member Portal</a>
+      <a href="variant-b-signup.html" id="nav-start">Get Started ▶</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="brand">
+      <div class="brand-logo">ShopEase</div>
+      <div class="brand-tagline">Member Portal<br>Registration System v2.1</div>
+    </div>
+
+    <h1>New Member Registration</h1>
+    <p class="page-desc">Complete all required fields to create your ShopEase member account. Fields marked with <span style="color:#dc2626">*</span> are mandatory.</p>
+
+    <div id="form-view">
+      <div class="error-banner" id="error-banner">Please correct the errors below before continuing.</div>
+      <form id="signup-form" novalidate>
+        <p class="required-note">* Required fields</p>
+
+        <div class="section-header">Account Credentials</div>
+
+        <div class="field">
+          <label>Email Address <span class="req">*</span></label>
+          <input id="email" type="text" name="email" placeholder="Enter your email">
+          <div class="hint">Must be a valid email. Used as your login username.</div>
+        </div>
+
+        <div class="field">
+          <label>Create Password <span class="req">*</span></label>
+          <input id="password" type="password" name="password" placeholder="••••••••">
+        </div>
+        <div class="password-rules" id="pw-rules" style="display:none">
+          <ul>
+            <li>Minimum 10 characters</li>
+            <li>At least one uppercase letter (A–Z)</li>
+            <li>At least one number (0–9)</li>
+            <li>At least one special character (!@#$%^&*)</li>
+          </ul>
+        </div>
+
+        <div class="field">
+          <label>Confirm Password <span class="req">*</span></label>
+          <input id="confirm-password" type="password" name="confirm_password" placeholder="Re-enter password">
+        </div>
+
+        <div class="section-header">Personal Information</div>
+
+        <div class="row">
+          <div class="field">
+            <label>First Name <span class="req">*</span></label>
+            <input id="first-name" type="text" name="first_name" placeholder="First">
+          </div>
+          <div class="field">
+            <label>Last Name <span class="req">*</span></label>
+            <input id="last-name" type="text" name="last_name" placeholder="Last">
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Mobile Phone Number <span class="req">*</span></label>
+          <input id="phone" type="tel" name="phone" placeholder="+1 (555) 000-0000">
+          <div class="hint">Required for account verification and order SMS alerts</div>
+        </div>
+
+        <div class="field">
+          <label>Date of Birth <span class="req">*</span></label>
+          <input id="dob" type="date" name="dob">
+          <div class="hint">You must be 18 or older. Required for age-restricted products.</div>
+        </div>
+
+        <div class="section-header">Communication Preferences</div>
+
+        <div class="field">
+          <label>Preferred Contact Method</label>
+          <select id="contact-pref" name="contact_pref">
+            <option value="">— Select one —</option>
+            <option value="email">Email</option>
+            <option value="sms">SMS</option>
+            <option value="both">Both Email and SMS</option>
+            <option value="none">Do not contact me</option>
+          </select>
+        </div>
+
+        <div class="terms">
+          <div class="terms-check">
+            <input type="checkbox" id="terms-check" required>
+            <label for="terms-check">
+              I have read and agree to ShopEase's <a href="#">Terms &amp; Conditions</a>,
+              <a href="#">Privacy Policy</a>, <a href="#">Cookie Policy</a>,
+              <a href="#">Refund Policy</a>, and <a href="#">Acceptable Use Policy</a>.
+              I consent to my data being processed as described.
+            </label>
+          </div>
+        </div>
+
+        <div class="submit-section">
+          <button type="submit" id="cta">Proceed to Account Activation →</button>
+          <p class="already">Already registered? <a href="#">Log into existing account</a></p>
+        </div>
+      </form>
+    </div>
+
+    <div id="success" style="display:none">
+      <div class="check">✓</div>
+      <h2>Registration Submitted</h2>
+      <p id="welcome-msg">Thank you. Please check your email to verify your account before logging in.</p>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('password').addEventListener('focus', function () {
+      document.getElementById('pw-rules').style.display = 'block'
+    })
+
+    document.getElementById('signup-form').addEventListener('submit', function (e) {
+      e.preventDefault()
+      const errors = []
+      if (!document.getElementById('email').value) errors.push('Email required')
+      if (!document.getElementById('password').value) errors.push('Password required')
+      if (!document.getElementById('confirm-password').value) errors.push('Please confirm password')
+      if (document.getElementById('password').value !== document.getElementById('confirm-password').value) errors.push('Passwords do not match')
+      if (!document.getElementById('terms-check').checked) errors.push('You must accept the terms')
+
+      if (errors.length) {
+        const banner = document.getElementById('error-banner')
+        banner.style.display = 'block'
+        banner.textContent = 'Please correct the errors: ' + errors.join('. ')
+        return
+      }
+
+      const email = document.getElementById('email').value
+      document.getElementById('form-view').style.display = 'none'
+      document.getElementById('success').style.display = 'block'
+      document.getElementById('welcome-msg').textContent = `A verification email has been sent to ${email}.`
+    })
+  </script>
+</body>
+</html>

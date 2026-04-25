@@ -12,22 +12,29 @@ const VARIANT_URLS: Record<'A' | 'B', string> = {
 const MAX_STEPS = 15
 const ACTION_TIMEOUT = 8000
 
-// Strings that confirm task success deterministically — checked before and after LLM judgment.
-const SUCCESS_PATTERNS = [
-  'welcome to shopease',
-  'registration submitted',
-  'account created',
-  'your account is ready',
-  'verification email has been sent',
-  'start saving today',
-  'shopease member plans',
-  'free plan',
-  'plus plan',
-]
+// Task-specific success patterns — prevents pricing text on the home page from
+// falsely triggering success for the create-account or learn-about-company tasks.
+const SUCCESS_PATTERNS: Record<string, string[]> = {
+  'create-account': [
+    'welcome to shopease!',
+    'registration submitted',
+    'account created for',
+    'your account is ready',
+    'verification email has been sent',
+    'start saving today',
+  ],
+  'find-pricing': [
+    'shopease member plans',
+  ],
+  'learn-about-company': [
+    'shopease was founded in',
+    'meet the team',
+  ],
+}
 
-function isSuccessDeterministic(pageText: string): boolean {
+function isSuccessDeterministic(taskId: string, pageText: string): boolean {
   const lower = pageText.toLowerCase()
-  return SUCCESS_PATTERNS.some(p => lower.includes(p))
+  return (SUCCESS_PATTERNS[taskId] ?? []).some(p => lower.includes(p))
 }
 
 export async function runSimulation(
@@ -56,7 +63,7 @@ export async function runSimulation(
       const pageElements = await extractPageElements(page)
 
       // Deterministic check first — never rely solely on LLM judgment.
-      if (isSuccessDeterministic(pageText)) {
+      if (isSuccessDeterministic(task.id, pageText)) {
         success = true
         console.log(`    ✓ Done at step ${i + 1}: success text confirmed on page`)
         break
@@ -65,7 +72,7 @@ export async function runSimulation(
       const action = await decideAction(persona, task, screenshot, url, pageText, pageElements, steps)
 
       if (action.type === 'done') {
-        if (isSuccessDeterministic(pageText)) {
+        if (isSuccessDeterministic(task.id, pageText)) {
           success = true
           console.log(`    ✓ Done at step ${i + 1}: ${action.reason}`)
         } else {

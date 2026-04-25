@@ -39,6 +39,7 @@ interface Summary {
 const TASK_LABELS: Record<string, string> = {
   'create-account': 'Create Account',
   'find-pricing': 'Find Pricing',
+  'learn-about-company': 'Explore Company',
 }
 
 function MetricCard({

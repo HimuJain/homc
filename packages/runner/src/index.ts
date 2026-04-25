@@ -7,7 +7,7 @@ import { runSimulation } from './runner'
 
 const VARIANTS: Array<'A' | 'B'> = ['A', 'B']
 const SELECTED_PERSONAS = personas.slice(0, 5)
-const SELECTED_TASKS = tasks.slice(0, 2)
+const SELECTED_TASKS = tasks
 
 async function main() {
   console.log('=== AI UX Simulator ===')

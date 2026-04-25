@@ -15,4 +15,11 @@ export const tasks: Task[] = [
     successCondition: 'Pricing tiers or member plans are visible (e.g. Free Plan, Plus Plan, pricing table)',
     failureCondition: 'User cannot locate pricing information after 10 steps',
   },
+  {
+    id: 'learn-about-company',
+    goal: 'Learn more about ShopEase — find out who they are, what they do, and whether they seem trustworthy',
+    preconditions: ['User starts on the ShopEase website'],
+    successCondition: 'Company background, founding story, team information, or mission details are visible on screen',
+    failureCondition: 'User cannot find any meaningful company information after exploring the site',
+  },
 ]

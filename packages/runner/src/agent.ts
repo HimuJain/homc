@@ -108,37 +108,35 @@ Rules:
 function fallbackAction(task: Task, url: string, pageText: string, previousSteps: Step[]): Action {
   const text = pageText.toLowerCase()
   const filledSelectors = new Set(
-    previousSteps
-      .flatMap(step => (step.action.type === 'fill' ? [step.action.selector] : [])),
+    previousSteps.flatMap(s => (s.action.type === 'fill' ? [s.action.selector] : [])),
   )
   const clickedSelectors = new Set(
-    previousSteps
-      .flatMap(step => (step.action.type === 'click' ? [step.action.selector] : [])),
+    previousSteps.flatMap(s => (s.action.type === 'click' ? [s.action.selector] : [])),
   )
   const cookieDismissed = previousSteps.some(
-    step => step.action.type === 'click' && step.action.selector === '#btn-accept',
+    s => s.action.type === 'click' && s.action.selector === '#btn-accept',
   )
 
-  if (
-    text.includes('welcome to shopease') ||
-    text.includes('registration submitted') ||
-    text.includes('your account is ready') ||
-    text.includes('verification email has been sent')
-  ) {
-    return { type: 'done', reason: 'Confirmation text is visible' }
+  const isVariantB = url.includes('variant-b')
+  const onSignupPage = url.includes('signup')
+  const onAboutPage = url.includes('about')
+
+  // Task-specific done checks
+  const donePatterns: Record<string, string[]> = {
+    'create-account': ['welcome to shopease!', 'registration submitted', 'account created for', 'your account is ready', 'verification email has been sent'],
+    'find-pricing': ['shopease member plans'],
+    'learn-about-company': ['shopease was founded in', 'meet the team'],
+  }
+  if ((donePatterns[task.id] ?? []).some(p => text.includes(p))) {
+    return { type: 'done', reason: 'Task completion confirmed' }
   }
 
+  // Cookie banner must be dismissed first on any B page
   if (!cookieDismissed && (text.includes('accept all cookies') || text.includes('cookie policy'))) {
     return { type: 'click', selector: '#btn-accept', reason: 'Dismiss the cookie consent banner' }
   }
 
   if (task.id === 'find-pricing') {
-    const isVariantB = url.includes('variant-b') || text.includes('member portal') || text.includes('registration system v2.1')
-
-    if (text.includes('free plan') || text.includes('plus plan') || text.includes('shopease member plans')) {
-      return { type: 'done', reason: 'Pricing information is visible on screen' }
-    }
-
     if (isVariantB) {
       const scrollCount = previousSteps.filter(s => s.action.type === 'scroll').length
       if (scrollCount < 3) {
@@ -146,13 +144,27 @@ function fallbackAction(task: Task, url: string, pageText: string, previousSteps
       }
       return { type: 'click', selector: '#pricing-link', reason: 'Click the pricing link to view plans' }
     }
+    // Variant A: pricing is visible on the home page — scroll to it
+    return { type: 'scroll', direction: 'down', reason: 'Scroll to the pricing section' }
+  }
 
-    return { type: 'click', selector: '#nav-pricing', reason: 'Click the Pricing link in the navigation bar' }
+  if (task.id === 'learn-about-company') {
+    if (isVariantB) {
+      return { type: 'click', selector: '#nav-resources', reason: 'Click Resources to find company information' }
+    }
+    return { type: 'click', selector: '#nav-about', reason: 'Click About in navigation' }
   }
 
   if (task.id === 'create-account') {
-    const isVariantB = url.includes('variant-b') || text.includes('member portal') || text.includes('registration system v2.1')
+    // Navigate from home to signup page first
+    if (!onSignupPage) {
+      if (isVariantB) {
+        return { type: 'click', selector: '#nav-portal', reason: 'Navigate to Member Portal to find the signup form' }
+      }
+      return { type: 'click', selector: '#nav-signup', reason: 'Click Sign Up in navigation' }
+    }
 
+    // Now on the signup page — fill the form
     const orderedFields = isVariantB
       ? [
           ['#email', 'alex@example.com'],
