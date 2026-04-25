@@ -1,0 +1,10 @@
+{
+  "name": "@homc/variants",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "vite --port 5174"
+  },
+  "devDependencies": {
+    "vite": "^5.2.11"
+  }
+}

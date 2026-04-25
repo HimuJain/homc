@@ -1,0 +1,17 @@
+{
+  "name": "homc",
+  "private": true,
+  "scripts": {
+    "dev": "fuser -k 3001/tcp 2>/dev/null; concurrently \"pnpm --filter @homc/variants dev\" \"pnpm --filter @homc/runner serve\" \"pnpm --filter @homc/web dev\"",
+    "sim": "pnpm --filter @homc/runner sim",
+    "dashboard": "concurrently \"pnpm --filter @homc/runner serve\" \"pnpm --filter @homc/web dev\"",
+    "demo": "fuser -k 3001/tcp 5173/tcp 5174/tcp 2>/dev/null; concurrently -n variants,api,web,sim \"pnpm --filter @homc/variants dev\" \"pnpm --filter @homc/runner serve\" \"pnpm --filter @homc/web dev\" \"sleep 8 && pnpm --filter @homc/runner sim\"",
+    "clean": "rm -f logs/*.json",
+    "install:browsers": "pnpm --filter @homc/runner exec playwright install chromium"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "tsx": "^4.11.0",
+    "typescript": "^5.4.5"
+  }
+}

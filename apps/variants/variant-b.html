@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ShopEase — Member Registration Portal</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #e8e8e8; padding: 40px 20px; }
+
+    /* Cookie banner blocks the entire page */
+    #cookie-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 999; }
+    #cookie-banner {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: #1a1a2e; color: #ccc; padding: 20px 28px;
+      z-index: 1000; font-size: 12px; line-height: 1.6;
+    }
+    #cookie-banner p { margin-bottom: 14px; }
+    #cookie-banner a { color: #818cf8; }
+    .cookie-btns { display: flex; gap: 10px; flex-wrap: wrap; }
+    .cookie-btns button { padding: 8px 16px; font-size: 12px; cursor: pointer; border-radius: 4px; border: 1px solid #444; }
+    #btn-reject { background: transparent; color: #aaa; }
+    #btn-manage { background: transparent; color: #aaa; }
+    #btn-accept { background: #6366f1; color: white; border-color: #6366f1; }
+
+    .container { max-width: 640px; margin: 0 auto; background: white; padding: 32px; border: 1px solid #ccc; }
+    .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+    .brand-logo { font-size: 18px; font-weight: 800; color: #6366f1; }
+    .brand-tagline { font-size: 10px; color: #aaa; border-left: 1px solid #ddd; padding-left: 10px; }
+    h1 { font-size: 18px; color: #333; margin-bottom: 4px; }
+    .page-desc { font-size: 12px; color: #999; margin-bottom: 24px; }
+
+    .section-header { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #888; border-bottom: 1px solid #eee; padding-bottom: 6px; margin: 20px 0 14px; }
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 12px; color: #555; margin-bottom: 3px; }
+    .field label .req { color: #e53e3e; margin-left: 2px; }
+    .field input, .field select { width: 100%; border: 1px solid #ccc; border-radius: 3px; padding: 9px 10px; font-size: 13px; outline: none; }
+    .field input:focus { border-color: #6366f1; }
+    .field .hint { font-size: 10px; color: #999; margin-top: 3px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .password-rules { font-size: 10px; color: #aaa; background: #f9f9f9; padding: 8px 10px; border-left: 3px solid #ddd; margin-top: -10px; margin-bottom: 14px; }
+    .password-rules li { margin-bottom: 2px; }
+
+    .terms { font-size: 11px; color: #666; margin: 16px 0; line-height: 1.6; }
+    .terms a { color: #6366f1; }
+    .terms-check { display: flex; gap: 8px; align-items: flex-start; }
+    .terms-check input { margin-top: 2px; width: auto; flex-shrink: 0; }
+
+    .submit-section { margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px; }
+    #cta { width: 100%; background: #4a5568; color: white; border: none; padding: 12px; font-size: 13px; cursor: pointer; border-radius: 3px; }
+    #cta:hover { background: #2d3748; }
+    .already { text-align: center; font-size: 11px; color: #aaa; margin-top: 10px; }
+    .already a { color: #6366f1; }
+    .required-note { font-size: 10px; color: #aaa; margin-bottom: 16px; }
+
+    .error-banner { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; padding: 10px 14px; font-size: 12px; border-radius: 4px; margin-bottom: 16px; display: none; }
+
+    #success { text-align: center; padding: 40px 20px; }
+    #success .check { font-size: 48px; margin-bottom: 16px; }
+    #success h2 { font-size: 20px; color: #111; margin-bottom: 8px; }
+    #success p { color: #666; font-size: 13px; }
+  </style>
+</head>
+<body>
+
+  <!-- Cookie overlay blocks page -->
+  <div id="cookie-overlay"></div>
+  <div id="cookie-banner">
+    <p>
+      ShopEase and our <strong>47 trusted partners</strong> use cookies and similar tracking technologies to personalise content, target ads, analyse site traffic, and improve your experience.
+      By clicking "Accept All" you consent to our use of cookies as described in our
+      <a href="#">Cookie Policy</a>, <a href="#">Privacy Notice</a>, and <a href="#">Terms of Service (v4.2)</a>.
+      You may withdraw consent at any time via Settings &gt; Privacy.
+    </p>
+    <div class="cookie-btns">
+      <button id="btn-reject">Reject Non-Essential</button>
+      <button id="btn-manage">Manage Preferences</button>
+      <button id="btn-accept">Accept All Cookies</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="brand">
+      <div class="brand-logo">ShopEase</div>
+      <div class="brand-tagline">Member Portal<br>Registration System v2.1</div>
+    </div>
+
+    <h1>New Member Registration</h1>
+    <p class="page-desc">Complete all required fields to create your ShopEase member account. Fields marked with <span style="color:#e53e3e">*</span> are mandatory.</p>
+
+    <div id="form-view">
+      <div class="error-banner" id="error-banner">
+        Please correct the errors below before continuing.
+      </div>
+
+      <form id="signup-form" novalidate>
+        <p class="required-note">* Required fields</p>
+
+        <div class="section-header">Account Credentials</div>
+
+        <div class="field">
+          <label>Email Address <span class="req">*</span></label>
+          <input id="email" type="text" name="email" placeholder="Enter your email">
+          <div class="hint">Must be a valid email. Used as your login username.</div>
+        </div>
+
+        <div class="field">
+          <label>Create Password <span class="req">*</span></label>
+          <input id="password" type="password" name="password" placeholder="••••••••">
+        </div>
+        <div class="password-rules" id="pw-rules" style="display:none">
+          <ul>
+            <li>Minimum 10 characters</li>
+            <li>At least one uppercase letter (A–Z)</li>
+            <li>At least one number (0–9)</li>
+            <li>At least one special character (!@#$%^&*)</li>
+          </ul>
+        </div>
+
+        <div class="field">
+          <label>Confirm Password <span class="req">*</span></label>
+          <input id="confirm-password" type="password" name="confirm_password" placeholder="Re-enter password">
+        </div>
+
+        <div class="section-header">Personal Information</div>
+
+        <div class="row">
+          <div class="field">
+            <label>First Name <span class="req">*</span></label>
+            <input id="first-name" type="text" name="first_name" placeholder="First">
+          </div>
+          <div class="field">
+            <label>Last Name <span class="req">*</span></label>
+            <input id="last-name" type="text" name="last_name" placeholder="Last">
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Mobile Phone Number <span class="req">*</span></label>
+          <input id="phone" type="tel" name="phone" placeholder="+1 (555) 000-0000">
+          <div class="hint">Required for account verification and order SMS alerts</div>
+        </div>
+
+        <div class="field">
+          <label>Date of Birth <span class="req">*</span></label>
+          <input id="dob" type="date" name="dob">
+          <div class="hint">You must be 18 or older. Required for age-restricted products.</div>
+        </div>
+
+        <div class="section-header">Communication Preferences</div>
+
+        <div class="field">
+          <label>Preferred Contact Method</label>
+          <select id="contact-pref" name="contact_pref">
+            <option value="">— Select one —</option>
+            <option value="email">Email</option>
+            <option value="sms">SMS</option>
+            <option value="both">Both Email and SMS</option>
+            <option value="none">Do not contact me</option>
+          </select>
+        </div>
+
+        <div class="terms">
+          <div class="terms-check">
+            <input type="checkbox" id="terms-check" required>
+            <label for="terms-check">
+              I have read and agree to ShopEase's <a href="#">Terms &amp; Conditions</a>,
+              <a href="#">Privacy Policy</a>, <a href="#">Cookie Policy</a>,
+              <a href="#">Refund Policy</a>, and <a href="#">Acceptable Use Policy</a>.
+              I consent to my data being processed as described.
+            </label>
+          </div>
+        </div>
+
+        <div class="submit-section">
+          <button type="submit" id="cta">Proceed to Account Activation →</button>
+          <p class="already">Already registered? <a href="#">Log into existing account</a></p>
+        </div>
+      </form>
+    </div>
+
+    <div id="success" style="display:none">
+      <div class="check">✓</div>
+      <h2>Registration Submitted</h2>
+      <p id="welcome-msg">Thank you. Please check your email to verify your account before logging in.</p>
+    </div>
+
+    <div style="margin-top: 48px; padding-top: 14px; border-top: 1px solid #f0f0f0; text-align: center;">
+      <a href="#" id="pricing-link" style="font-size: 10px; color: #ccc; text-decoration: none; letter-spacing: .02em;">pricing information</a>
+    </div>
+    <div id="b-pricing" style="display:none; margin-top: 10px; padding: 14px 16px; background: #fafafa; border: 1px solid #eee; font-size: 12px; color: #555; border-radius: 3px;">
+      <p style="font-weight: 700; margin-bottom: 8px; color: #333;">ShopEase Member Plans</p>
+      <p>Free Plan — $0/month &nbsp;|&nbsp; Plus Plan — $9.99/month &nbsp;|&nbsp; Premium Plan — $19.99/month</p>
+    </div>
+  </div>
+
+  <script>
+    // Cookie consent gate
+    document.getElementById('btn-accept').addEventListener('click', function () {
+      document.getElementById('cookie-overlay').style.display = 'none'
+      document.getElementById('cookie-banner').style.display = 'none'
+    })
+    document.getElementById('btn-reject').addEventListener('click', function () {
+      document.getElementById('cookie-overlay').style.display = 'none'
+      document.getElementById('cookie-banner').style.display = 'none'
+    })
+    document.getElementById('btn-manage').addEventListener('click', function () {
+      alert('Cookie preference center is currently unavailable. Please try again later.')
+    })
+
+    // Show password rules only after focusing password field
+    document.getElementById('password').addEventListener('focus', function () {
+      document.getElementById('pw-rules').style.display = 'block'
+    })
+
+    document.getElementById('pricing-link').addEventListener('click', function (e) {
+      e.preventDefault()
+      document.getElementById('b-pricing').style.display = 'block'
+    })
+
+    document.getElementById('signup-form').addEventListener('submit', function (e) {
+      e.preventDefault()
+      const errors = []
+      if (!document.getElementById('email').value) errors.push('Email required')
+      if (!document.getElementById('password').value) errors.push('Password required')
+      if (!document.getElementById('confirm-password').value) errors.push('Please confirm password')
+      if (document.getElementById('password').value !== document.getElementById('confirm-password').value) errors.push('Passwords do not match')
+      if (!document.getElementById('terms-check').checked) errors.push('You must accept the terms')
+
+      if (errors.length) {
+        const banner = document.getElementById('error-banner')
+        banner.style.display = 'block'
+        banner.textContent = 'Please correct the errors: ' + errors.join('. ')
+        return
+      }
+
+      const email = document.getElementById('email').value
+      document.getElementById('form-view').style.display = 'none'
+      document.getElementById('success').style.display = 'block'
+      document.getElementById('welcome-msg').textContent = `A verification email has been sent to ${email}.`
+    })
+  </script>
+</body>
+</html>
