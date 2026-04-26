@@ -452,7 +452,9 @@ function WinnerBanner({ winner, A, B }: { winner: Summary['winner']; A: VariantS
 
 // ─── Task View ────────────────────────────────────────────────────────────────
 
-function TaskView({ A, B, personaResults }: { A: VariantStats; B: VariantStats; personaResults: PersonaResult[] }) {
+function TaskView({ A, B, personaResults, winner }: { A: VariantStats; B: VariantStats; personaResults: PersonaResult[]; winner: 'A' | 'B' | 'tie' | null }) {
+  const frictionVariant = winner === 'A' ? 'A' : 'B'
+  const frictionStats = frictionVariant === 'A' ? A : B
   return (
     <div className="space-y-8">
       {/* Metric cards */}
@@ -491,12 +493,12 @@ function TaskView({ A, B, personaResults }: { A: VariantStats; B: VariantStats; 
         </div>
 
         <div className="border border-rule p-6">
-          <div className="label mb-6">Top Friction Points — Variant B</div>
-          {B.topFrictionPoints.length === 0 ? (
+          <div className="label mb-6">Top Friction Points — Variant {frictionVariant}</div>
+          {frictionStats.topFrictionPoints.length === 0 ? (
             <p className="text-ink-3 text-sm">No friction points recorded</p>
           ) : (
             <ol className="space-y-4">
-              {B.topFrictionPoints.map((fp, i) => (
+              {frictionStats.topFrictionPoints.map((fp, i) => (
                 <li key={i} className="flex gap-4">
                   <span className="font-mono text-[10px] text-ink-3 w-4 pt-0.5 shrink-0">{i + 1}</span>
                   <span className="text-sm text-ink-2 leading-snug">{fp}</span>
@@ -518,7 +520,6 @@ function TaskView({ A, B, personaResults }: { A: VariantStats; B: VariantStats; 
               <th className="text-left px-6 py-3 label">Persona</th>
               <th className="text-left px-6 py-3 label text-a">Variant A</th>
               <th className="text-left px-6 py-3 label text-b">Variant B</th>
-              <th className="text-left px-6 py-3 label">Task Drift (A_10)</th>
             </tr>
           </thead>
           <tbody>
@@ -540,9 +541,6 @@ function TaskView({ A, B, personaResults }: { A: VariantStats; B: VariantStats; 
                         <span className="text-ink-3 text-xs">{pr.variantB.steps.toFixed(1)} steps</span>
                       </div>
                     : <span className="text-ink-4">—</span>}
-                </td>
-                <td className="px-6 py-4 text-xs font-mono text-ink-3 max-w-[200px] truncate">
-                  {pr.variantA?.taskDrift || pr.variantB?.taskDrift || '—'}
                 </td>
               </tr>
             ))}
@@ -662,7 +660,7 @@ function PopulationModelPanel({ model, onRefresh }: { model: PopulationModel; on
                     {sa.variantB ? <ScoreBadge score={sa.variantB.successScore} /> : <span className="text-ink-4">—</span>}
                   </td>
                   <td className="px-4 py-3 font-mono text-ink-3 max-w-[200px] truncate">
-                    {sa.variantA?.taskDrift || '—'}
+                    {sa.subAgentType === 'A_10' ? '—' : (sa.variantA?.taskDrift || '—')}
                   </td>
                 </tr>
               ))
@@ -742,7 +740,7 @@ function Dashboard({ summary, onRefresh }: { summary: Summary; onRefresh: () => 
       ) : (
         <>
           <WinnerBanner winner={winner} A={A} B={B} />
-          <TaskView A={A} B={B} personaResults={personaResults} />
+          <TaskView A={A} B={B} personaResults={personaResults} winner={winner} />
           {summary.populationModel && (
             <PopulationModelPanel model={summary.populationModel} onRefresh={onRefresh} />
           )}
