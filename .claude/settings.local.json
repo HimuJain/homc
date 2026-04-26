@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/code-server/**)",
+      "Bash(export PATH=\"$HOME/.nvm/versions/node/v20.20.2/bin:$PATH\")",
+      "Bash(fuser -k 3001/tcp 5173/tcp 5174/tcp)",
+      "Bash(pnpm run *)",
+      "Bash(pnpm run clean:*)"
+    ]
+  }
+}

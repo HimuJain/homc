@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
-} from 'recharts'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type SubAgentType = 'A_00' | 'A_10' | 'A_11' | 'A_12'
 const SA_TYPES: SubAgentType[] = ['A_00', 'A_10', 'A_11', 'A_12']
@@ -61,6 +60,8 @@ interface Summary {
   populationModel?: PopulationModel
 }
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
 const TASK_LABELS: Record<string, string> = {
   'create-account': 'Create Account',
   'find-pricing': 'Find Pricing',
@@ -74,14 +75,96 @@ const SA_LABELS: Record<SubAgentType, string> = {
   A_12: 'Fully distracted',
 }
 
-function pct(v: number) { return `${Math.round(v * 100)}%` }
+// ─── Utilities ────────────────────────────────────────────────────────────────
 
+function pct(v: number) { return `${Math.round(v * 100)}%` }
 function pKey(personaName: string) { return personaName.split(' ')[0] }
 
-function ScoreBadge({ score }: { score: number }) {
-  const cls = score >= 0.75 ? 'text-green-400' : score >= 0.4 ? 'text-yellow-400' : 'text-red-400'
-  return <span className={`font-mono font-bold ${cls}`}>{pct(score)}</span>
+// ─── Geometric Decorators ─────────────────────────────────────────────────────
+
+function DotGrid({ rows = 3, cols = 5, gap = 10, r = 1.5 }: { rows?: number; cols?: number; gap?: number; r?: number }) {
+  const w = (cols - 1) * gap + r * 4
+  const h = (rows - 1) * gap + r * 4
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
+      {Array.from({ length: rows }, (_, row) =>
+        Array.from({ length: cols }, (_, col) => (
+          <circle
+            key={`${row}-${col}`}
+            cx={col * gap + r * 2}
+            cy={row * gap + r * 2}
+            r={r}
+            fill="currentColor"
+          />
+        ))
+      )}
+    </svg>
+  )
 }
+
+function ArcDecor({ size = 56, degrees = 270 }: { size?: number; degrees?: number }) {
+  const cx = size / 2, cy = size / 2, r = size / 2 - 2
+  const startRad = -Math.PI / 2
+  const endRad = startRad + (degrees * Math.PI) / 180
+  const x1 = cx + r * Math.cos(startRad)
+  const y1 = cy + r * Math.sin(startRad)
+  const x2 = cx + r * Math.cos(endRad)
+  const y2 = cy + r * Math.sin(endRad)
+  const largeArc = degrees > 180 ? 1 : 0
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+      <path
+        d={`M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}`}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1"
+      />
+    </svg>
+  )
+}
+
+function TickMark({ winner }: { winner: boolean }) {
+  if (!winner) return null
+  return (
+    <span className="inline-block w-1.5 h-1.5 rounded-full bg-ink align-middle ml-1" aria-hidden="true" />
+  )
+}
+
+// ─── Score Badge ──────────────────────────────────────────────────────────────
+
+function ScoreBadge({ score }: { score: number }) {
+  const cls =
+    score >= 0.75 ? 'text-ink font-bold' :
+    score >= 0.4  ? 'text-ink-2 font-medium' :
+                    'text-ink-3 font-normal'
+  return <span className={`font-mono text-sm ${cls}`}>{pct(score)}</span>
+}
+
+// ─── Horizontal Bar ───────────────────────────────────────────────────────────
+
+function HBar({ label, value, color, max = 100 }: { label: string; value: number; color: 'a' | 'b'; max?: number }) {
+  const fill = color === 'a' ? '#1A5F8A' : '#6BA3BE'
+  const textColor = color === 'a' ? 'text-a' : 'text-b'
+  const pctWidth = Math.min((value / max) * 100, 100)
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <span className={`text-[10px] font-semibold uppercase tracking-label ${textColor}`}>
+          Variant {label}
+        </span>
+        <span className={`font-mono text-sm font-bold ${textColor}`}>{value}%</span>
+      </div>
+      <div className="h-4 bg-rule w-full">
+        <div
+          className="h-full transition-all duration-500"
+          style={{ width: `${pctWidth}%`, backgroundColor: fill }}
+        />
+      </div>
+    </div>
+  )
+}
+
+// ─── Metric Card ──────────────────────────────────────────────────────────────
 
 function MetricCard({
   label, aValue, bValue, format, higherIsBetter = true,
@@ -91,35 +174,62 @@ function MetricCard({
 }) {
   const aWins = higherIsBetter ? aValue >= bValue : aValue <= bValue
   return (
-    <div className="bg-gray-900 rounded-xl p-5">
-      <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">{label}</div>
-      <div className="flex gap-3">
-        <div className={`flex-1 rounded-lg p-3 ${aWins ? 'bg-indigo-950 ring-1 ring-indigo-500' : 'bg-gray-800'}`}>
-          <div className="text-xs text-gray-400 mb-1">Variant A</div>
-          <div className={`text-2xl font-bold ${aWins ? 'text-indigo-300' : 'text-gray-400'}`}>{format(aValue)}</div>
+    <div className="border border-rule p-6">
+      <div className="label mb-5">{label}</div>
+      <div className="space-y-4">
+        <div className="flex items-baseline justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-label text-a">A</span>
+            <TickMark winner={aWins} />
+          </div>
+          <span className={`font-mono text-2xl font-bold ${aWins ? 'text-ink' : 'text-ink-3'}`}>
+            {format(aValue)}
+          </span>
         </div>
-        <div className={`flex-1 rounded-lg p-3 ${!aWins ? 'bg-orange-950 ring-1 ring-orange-500' : 'bg-gray-800'}`}>
-          <div className="text-xs text-gray-400 mb-1">Variant B</div>
-          <div className={`text-2xl font-bold ${!aWins ? 'text-orange-300' : 'text-gray-400'}`}>{format(bValue)}</div>
+        <div className="border-t border-rule" />
+        <div className="flex items-baseline justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-label text-b">B</span>
+            <TickMark winner={!aWins} />
+          </div>
+          <span className={`font-mono text-2xl font-bold ${!aWins ? 'text-ink' : 'text-ink-3'}`}>
+            {format(bValue)}
+          </span>
         </div>
       </div>
     </div>
   )
 }
 
+// ─── Empty State ──────────────────────────────────────────────────────────────
+
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center">
-      <div className="text-6xl">🧪</div>
-      <h2 className="text-2xl font-bold text-white">No results yet</h2>
-      <p className="text-gray-400 max-w-sm">Run a simulation to see A/B comparison results here.</p>
-      <div className="mt-2 bg-gray-900 rounded-lg px-5 py-3 font-mono text-sm text-indigo-400">npm run sim</div>
-      <p className="text-gray-600 text-xs mt-1">Dashboard auto-refreshes every 3 seconds</p>
+    <div className="flex flex-col items-start gap-10 py-20 border-t-2 border-ink">
+      <div className="flex items-start gap-8">
+        <div className="text-ink-4">
+          <ArcDecor size={80} degrees={240} />
+        </div>
+        <div>
+          <h2 className="text-5xl font-black tracking-tight leading-none mb-3">No results yet</h2>
+          <p className="text-ink-2 text-sm leading-relaxed max-w-xs">
+            Run a simulation to populate this dashboard with A/B comparison results.
+          </p>
+        </div>
+      </div>
+      <div>
+        <div className="label mb-3">Start a simulation</div>
+        <code className="inline-block border border-ink px-5 py-3 text-sm font-mono bg-ink text-paper">
+          pnpm run sim
+        </code>
+        <p className="text-ink-3 text-xs mt-3">Dashboard refreshes automatically every 3 seconds</p>
+      </div>
     </div>
   )
 }
 
-// Recompute overall weighted scores from edited weights without hitting the server
+// ─── computePreview (unchanged logic) ────────────────────────────────────────
+
 function computePreview(
   personaScores: PersonaWeightedScore[],
   groupWeights: Record<string, number>,
@@ -143,13 +253,9 @@ function computePreview(
   return { A: overallA, B: overallB }
 }
 
-function WeightsEditor({
-  model,
-  onApplied,
-}: {
-  model: PopulationModel
-  onApplied: () => void
-}) {
+// ─── Weights Editor ───────────────────────────────────────────────────────────
+
+function WeightsEditor({ model, onApplied }: { model: PopulationModel; onApplied: () => void }) {
   const initGroupWeights = () => {
     const gw: Record<string, number> = {}
     for (const ps of model.personaScores) gw[pKey(ps.personaName)] = ps.groupWeight
@@ -191,10 +297,7 @@ function WeightsEditor({
       const res = await fetch('/api/weights', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          personaGroupWeights: groupWeights,
-          personaSubAgentWeights: subAgentWeights,
-        }),
+        body: JSON.stringify({ personaGroupWeights: groupWeights, personaSubAgentWeights: subAgentWeights }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -215,71 +318,71 @@ function WeightsEditor({
   }
 
   return (
-    <div className="mt-5 border border-gray-700 rounded-xl p-5">
-      <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-5">Edit Population Weights</div>
+    <div className="mt-8 border-t-2 border-ink pt-8">
+      <div className="label mb-8">Adjust Population Weights</div>
 
       {/* Live preview */}
-      <div className="flex items-center gap-8 bg-gray-800 rounded-lg px-5 py-4 mb-6">
+      <div className="border border-rule p-6 mb-8 flex items-end gap-12">
         <div>
-          <div className="text-xs text-gray-500 mb-1">Preview A</div>
-          <div className={`text-2xl font-bold font-mono ${preview.A >= preview.B ? 'text-indigo-300' : 'text-gray-500'}`}>
+          <div className="label mb-2">Preview — Variant A</div>
+          <div className={`font-mono text-4xl font-black ${preview.A >= preview.B ? 'text-a' : 'text-ink-3'}`}>
             {pct(preview.A)}
           </div>
         </div>
         <div>
-          <div className="text-xs text-gray-500 mb-1">Preview B</div>
-          <div className={`text-2xl font-bold font-mono ${preview.B > preview.A ? 'text-orange-300' : 'text-gray-500'}`}>
+          <div className="label mb-2">Preview — Variant B</div>
+          <div className={`font-mono text-4xl font-black ${preview.B > preview.A ? 'text-b' : 'text-ink-3'}`}>
             {pct(preview.B)}
           </div>
         </div>
-        <div className="text-xs text-gray-600 leading-relaxed">
+        <p className="text-xs text-ink-3 leading-relaxed ml-auto max-w-[180px] text-right">
           Scores update as you edit.<br />
-          Click Apply to persist and regenerate the summary.
-        </div>
+          Apply to persist and regenerate.
+        </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-8">
+      <div className="grid grid-cols-2 gap-12">
         {/* Group weights */}
         <div>
-          <div className="text-xs text-gray-400 font-semibold mb-3 uppercase tracking-wide">Persona Group Weights</div>
-          <div className="space-y-2">
+          <div className="label mb-5">Persona Group Weights</div>
+          <div className="space-y-4">
             {Object.entries(groupWeights).map(([pk, val]) => (
-              <div key={pk} className="flex items-center gap-3">
-                <span className="text-gray-400 text-sm w-16">{pk}</span>
+              <div key={pk} className="flex items-center justify-between">
+                <span className="text-sm text-ink-2">{pk}</span>
                 <input
                   type="number"
                   min={0} max={1} step={0.01}
                   value={val}
                   onChange={e => setGroupWeights(prev => ({ ...prev, [pk]: parseFloat(e.target.value) || 0 }))}
-                  className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm font-mono text-gray-200 focus:outline-none focus:border-indigo-500"
+                  className="w-20 bg-transparent border-b border-rule pb-1 text-sm font-mono text-ink text-right focus:outline-none focus:border-ink"
                 />
               </div>
             ))}
           </div>
-          <div className={`mt-3 text-xs font-mono ${Math.abs(groupSum - 1.0) < 0.001 ? 'text-green-500' : 'text-red-400'}`}>
-            sum = {groupSum.toFixed(3)}{Math.abs(groupSum - 1.0) < 0.001 ? ' ✓' : ' — must equal 1.0'}
+          <div className={`mt-4 text-xs font-mono pt-3 border-t ${Math.abs(groupSum - 1.0) < 0.001 ? 'text-ink border-ink' : 'text-red-600 border-red-300'}`}>
+            sum = {groupSum.toFixed(3)}{Math.abs(groupSum - 1.0) < 0.001 ? ' — valid' : ' — must equal 1.000'}
           </div>
         </div>
 
         {/* Sub-agent weights */}
         <div>
-          <div className="text-xs text-gray-400 font-semibold mb-3 uppercase tracking-wide">Sub-Agent Weights per Persona</div>
+          <div className="label mb-5">Sub-Agent Weights per Persona</div>
           <table className="w-full text-xs">
             <thead>
-              <tr className="text-gray-600 text-left">
-                <th className="pb-2 font-medium">Persona</th>
+              <tr className="text-ink-3 text-left border-b border-rule">
+                <th className="pb-2 font-medium pr-4">Persona</th>
                 {SA_TYPES.map(t => (
-                  <th key={t} className="pb-2 font-mono text-center">{t}</th>
+                  <th key={t} className="pb-2 font-mono text-center px-1">{t}</th>
                 ))}
-                <th className="pb-2 text-right font-medium">Sum</th>
+                <th className="pb-2 font-medium text-right">Sum</th>
               </tr>
             </thead>
             <tbody>
               {Object.entries(subAgentWeights).map(([pk, weights]) => (
-                <tr key={pk}>
-                  <td className="py-1.5 text-gray-400 pr-2">{pk}</td>
+                <tr key={pk} className="border-b border-rule">
+                  <td className="py-2.5 text-ink-2 pr-4">{pk}</td>
                   {SA_TYPES.map(t => (
-                    <td key={t} className="py-1.5 px-1 text-center">
+                    <td key={t} className="py-2.5 px-1 text-center">
                       <input
                         type="number"
                         min={0} max={1} step={0.01}
@@ -288,11 +391,11 @@ function WeightsEditor({
                           ...prev,
                           [pk]: { ...prev[pk], [t]: parseFloat(e.target.value) || 0 },
                         }))}
-                        className="w-14 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 font-mono text-gray-200 text-center focus:outline-none focus:border-indigo-500"
+                        className="w-12 bg-transparent border-b border-rule pb-0.5 font-mono text-ink text-center focus:outline-none focus:border-ink"
                       />
                     </td>
                   ))}
-                  <td className={`py-1.5 text-right font-mono ${Math.abs(subAgentSums[pk] - 1.0) < 0.001 ? 'text-green-500' : 'text-red-400'}`}>
+                  <td className={`py-2.5 text-right font-mono ${Math.abs(subAgentSums[pk] - 1.0) < 0.001 ? 'text-ink' : 'text-red-600'}`}>
                     {subAgentSums[pk]?.toFixed(2)}
                   </td>
                 </tr>
@@ -302,24 +405,20 @@ function WeightsEditor({
         </div>
       </div>
 
-      {error && <div className="mt-4 text-xs text-red-400">{error}</div>}
-      {saved && <div className="mt-4 text-xs text-green-500">Weights saved — summary regenerated.</div>}
+      {error && <p className="mt-5 text-xs text-red-600">{error}</p>}
+      {saved && <p className="mt-5 text-xs text-ink-2">Weights saved — summary regenerated.</p>}
 
-      <div className="flex gap-3 mt-5">
+      <div className="flex gap-3 mt-8">
         <button
           onClick={handleApply}
           disabled={!isValid || saving}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-            isValid && !saving
-              ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
-              : 'bg-gray-700 text-gray-500 cursor-not-allowed'
-          }`}
+          className="px-8 py-2.5 text-xs font-semibold tracking-label uppercase bg-ink text-paper transition-opacity disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-75"
         >
-          {saving ? 'Applying...' : 'Apply Weights'}
+          {saving ? 'Applying…' : 'Apply Weights'}
         </button>
         <button
           onClick={handleReset}
-          className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-800 hover:bg-gray-700 text-gray-400"
+          className="px-8 py-2.5 text-xs font-semibold tracking-label uppercase border border-ink text-ink hover:bg-ink hover:text-paper transition-colors"
         >
           Reset
         </button>
@@ -327,6 +426,303 @@ function WeightsEditor({
     </div>
   )
 }
+
+// ─── Winner Banner ────────────────────────────────────────────────────────────
+
+function WinnerBanner({ winner, A, B }: { winner: Summary['winner']; A: VariantStats; B: VariantStats }) {
+  if (!winner) return null
+  const borderColor = winner === 'A' ? 'border-a' : winner === 'B' ? 'border-b' : 'border-ink-4'
+  return (
+    <div className={`border-l-[3px] pl-7 py-3 mb-12 ${borderColor}`}>
+      <div className="text-4xl font-black tracking-tight leading-tight">
+        {winner === 'tie' ? 'Both Variants Tied' : `Variant ${winner} Wins`}
+      </div>
+      {winner !== 'tie' && (
+        <p className="text-sm text-ink-2 mt-2 leading-relaxed">
+          {winner === 'A'
+            ? `+${Math.round((A.successRate - B.successRate) * 100)}pp success rate  ·  ${(B.avgStepCount - A.avgStepCount).toFixed(1)} fewer steps on average`
+            : `+${Math.round((B.successRate - A.successRate) * 100)}pp success rate  ·  ${(A.avgStepCount - B.avgStepCount).toFixed(1)} fewer steps on average`}
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ─── Task View ────────────────────────────────────────────────────────────────
+
+function TaskView({ A, B, personaResults }: { A: VariantStats; B: VariantStats; personaResults: PersonaResult[] }) {
+  return (
+    <div className="space-y-8">
+      {/* Metric cards */}
+      <div className="grid grid-cols-3">
+        <MetricCard
+          label="Avg Score"
+          aValue={Math.round(A.successRate * 100)}
+          bValue={Math.round(B.successRate * 100)}
+          format={v => `${v}%`}
+          higherIsBetter
+        />
+        <MetricCard
+          label="Avg Completion Time"
+          aValue={A.avgCompletionTimeMs}
+          bValue={B.avgCompletionTimeMs}
+          format={v => `${(v / 1000).toFixed(1)}s`}
+          higherIsBetter={false}
+        />
+        <MetricCard
+          label="Avg Steps"
+          aValue={A.avgStepCount}
+          bValue={B.avgStepCount}
+          format={v => v.toFixed(1)}
+          higherIsBetter={false}
+        />
+      </div>
+
+      {/* Success rate bars + friction */}
+      <div className="grid grid-cols-2 gap-0">
+        <div className="border border-rule p-6 border-r-0">
+          <div className="label mb-6">Success Rate</div>
+          <div className="space-y-5">
+            <HBar label="A" value={Math.round(A.successRate * 100)} color="a" />
+            <HBar label="B" value={Math.round(B.successRate * 100)} color="b" />
+          </div>
+        </div>
+
+        <div className="border border-rule p-6">
+          <div className="label mb-6">Top Friction Points — Variant B</div>
+          {B.topFrictionPoints.length === 0 ? (
+            <p className="text-ink-3 text-sm">No friction points recorded</p>
+          ) : (
+            <ol className="space-y-4">
+              {B.topFrictionPoints.map((fp, i) => (
+                <li key={i} className="flex gap-4">
+                  <span className="font-mono text-[10px] text-ink-3 w-4 pt-0.5 shrink-0">{i + 1}</span>
+                  <span className="text-sm text-ink-2 leading-snug">{fp}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      </div>
+
+      {/* Persona results table */}
+      <div className="border border-rule">
+        <div className="px-6 pt-6 pb-4 border-b border-rule">
+          <div className="label">Results by Persona (avg across sub-agents)</div>
+        </div>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-rule">
+              <th className="text-left px-6 py-3 label">Persona</th>
+              <th className="text-left px-6 py-3 label text-a">Variant A</th>
+              <th className="text-left px-6 py-3 label text-b">Variant B</th>
+              <th className="text-left px-6 py-3 label">Task Drift (A_10)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {personaResults.map((pr, i) => (
+              <tr key={i} className="border-t border-rule hover:bg-ink/[0.02] transition-colors">
+                <td className="px-6 py-4 font-medium whitespace-nowrap">{pr.personaName}</td>
+                <td className="px-6 py-4">
+                  {pr.variantA
+                    ? <div className="flex items-baseline gap-2">
+                        <ScoreBadge score={pr.variantA.successScore} />
+                        <span className="text-ink-3 text-xs">{pr.variantA.steps.toFixed(1)} steps</span>
+                      </div>
+                    : <span className="text-ink-4">—</span>}
+                </td>
+                <td className="px-6 py-4">
+                  {pr.variantB
+                    ? <div className="flex items-baseline gap-2">
+                        <ScoreBadge score={pr.variantB.successScore} />
+                        <span className="text-ink-3 text-xs">{pr.variantB.steps.toFixed(1)} steps</span>
+                      </div>
+                    : <span className="text-ink-4">—</span>}
+                </td>
+                <td className="px-6 py-4 text-xs font-mono text-ink-3 max-w-[200px] truncate">
+                  {pr.variantA?.taskDrift || pr.variantB?.taskDrift || '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="px-6 py-3 border-t border-rule flex gap-6">
+          <span className="text-[10px] text-ink-3">Variant A: {A.runs} run{A.runs !== 1 ? 's' : ''}</span>
+          <span className="text-[10px] text-ink-3">Variant B: {B.runs} run{B.runs !== 1 ? 's' : ''}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Population Model Panel ───────────────────────────────────────────────────
+
+function PopulationModelPanel({ model, onRefresh }: { model: PopulationModel; onRefresh: () => void }) {
+  const [editOpen, setEditOpen] = useState(false)
+
+  return (
+    <div className="mt-16 border-t-2 border-ink pt-10">
+      {/* Section header */}
+      <div className="flex items-start justify-between mb-10">
+        <div className="flex items-start gap-6">
+          <div className="text-ink-4 mt-1">
+            <ArcDecor size={48} degrees={210} />
+          </div>
+          <div>
+            <div className="label mb-1">Population Model</div>
+            <h2 className="text-2xl font-black tracking-tight">Weighted A/B Scores</h2>
+          </div>
+        </div>
+        <button
+          onClick={() => setEditOpen(o => !o)}
+          className={`mt-1 px-6 py-2 text-xs font-semibold tracking-label uppercase transition-colors ${
+            editOpen
+              ? 'bg-ink text-paper'
+              : 'border border-ink text-ink hover:bg-ink hover:text-paper'
+          }`}
+        >
+          {editOpen ? 'Close Editor' : 'Edit Weights'}
+        </button>
+      </div>
+
+      {/* Overall weighted scores */}
+      <div className="grid grid-cols-2 mb-8">
+        <div className={`border border-rule p-8 border-r-0 ${model.winner === 'A' ? 'bg-a-pale' : ''}`}>
+          <div className="label mb-3 text-a">Variant A — Weighted Score</div>
+          <div className="font-mono text-6xl font-black text-ink leading-none">{pct(model.overallScore.A)}</div>
+        </div>
+        <div className={`border border-rule p-8 ${model.winner === 'B' ? 'bg-b-pale' : ''}`}>
+          <div className="label mb-3 text-b">Variant B — Weighted Score</div>
+          <div className="font-mono text-6xl font-black text-ink-3 leading-none">{pct(model.overallScore.B)}</div>
+        </div>
+      </div>
+
+      {/* Persona cards */}
+      <div className="grid grid-cols-5 mb-8">
+        {model.personaScores.map((ps, i) => (
+          <div key={i} className={`border border-rule p-4 ${i > 0 ? 'border-l-0' : ''}`}>
+            <div className="text-xs font-semibold mb-0.5 truncate">{ps.personaName.split(' (')[0]}</div>
+            <div className="text-[10px] text-ink-3 mb-4">group {Math.round(ps.groupWeight * 100)}%</div>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-[10px] text-a uppercase tracking-label">A</span>
+                <ScoreBadge score={ps.weightedPersonaScore.A} />
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[10px] text-b uppercase tracking-label">B</span>
+                <ScoreBadge score={ps.weightedPersonaScore.B} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Sub-agent breakdown */}
+      <div className="border border-rule">
+        <div className="px-6 pt-5 pb-4 border-b border-rule">
+          <div className="label">Sub-Agent Breakdown</div>
+        </div>
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-rule">
+              <th className="text-left px-6 py-3 label">Persona</th>
+              <th className="text-left px-4 py-3 label">Grp Wt</th>
+              <th className="text-left px-4 py-3 label">Sub-Agent</th>
+              <th className="text-left px-4 py-3 label">SA Wt</th>
+              <th className="text-left px-4 py-3 label text-a">A Score</th>
+              <th className="text-left px-4 py-3 label text-b">B Score</th>
+              <th className="text-left px-4 py-3 label">Task Drift (A)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {model.personaScores.flatMap((ps, pi) =>
+              ps.subAgents.map((sa, si) => (
+                <tr key={`${pi}-${si}`} className="border-t border-rule hover:bg-ink/[0.02] transition-colors">
+                  {si === 0 && (
+                    <td className="px-6 py-3 font-medium text-ink align-top" rowSpan={ps.subAgents.length}>
+                      {ps.personaName.split(' (')[0]}
+                    </td>
+                  )}
+                  {si === 0 && (
+                    <td className="px-4 py-3 font-mono text-ink-3 align-top" rowSpan={ps.subAgents.length}>
+                      {Math.round(ps.groupWeight * 100)}%
+                    </td>
+                  )}
+                  <td className="px-4 py-3">
+                    <span className="font-mono text-ink">{sa.subAgentType}</span>
+                    <span className="text-ink-3 ml-2">— {SA_LABELS[sa.subAgentType]}</span>
+                  </td>
+                  <td className="px-4 py-3 font-mono text-ink-3">{Math.round(sa.weight * 100)}%</td>
+                  <td className="px-4 py-3">
+                    {sa.variantA ? <ScoreBadge score={sa.variantA.successScore} /> : <span className="text-ink-4">—</span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    {sa.variantB ? <ScoreBadge score={sa.variantB.successScore} /> : <span className="text-ink-4">—</span>}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-ink-3 max-w-[200px] truncate">
+                    {sa.variantA?.taskDrift || '—'}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {editOpen && (
+        <WeightsEditor
+          model={model}
+          onApplied={() => { onRefresh(); setEditOpen(false) }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
+
+function Dashboard({ summary, onRefresh }: { summary: Summary; onRefresh: () => void }) {
+  const taskIds = Object.keys(summary.tasks ?? {})
+  const [activeTask, setActiveTask] = useState<string>(taskIds[0] ?? '')
+
+  const taskData = summary.tasks?.[activeTask]
+  const A = taskData?.A ?? summary.variants.A
+  const B = taskData?.B ?? summary.variants.B
+  const personaResults = taskData?.personaResults ?? summary.personaResults
+  const winner = taskData?.winner ?? summary.winner
+
+  return (
+    <>
+      {/* Task tabs */}
+      {taskIds.length > 1 && (
+        <div className="flex border-b-2 border-ink mb-12">
+          {taskIds.map(id => (
+            <button
+              key={id}
+              onClick={() => setActiveTask(id)}
+              className={`px-6 py-3 text-xs font-semibold tracking-label uppercase transition-colors ${
+                activeTask === id
+                  ? 'bg-ink text-paper'
+                  : 'text-ink-3 hover:text-ink'
+              }`}
+            >
+              {TASK_LABELS[id] ?? id}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <WinnerBanner winner={winner} A={A} B={B} />
+      <TaskView A={A} B={B} personaResults={personaResults} />
+
+      {summary.populationModel && (
+        <PopulationModelPanel model={summary.populationModel} onRefresh={onRefresh} />
+      )}
+    </>
+  )
+}
+
+// ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
   const [summary, setSummary] = useState<Summary | null>(null)
@@ -349,18 +745,25 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-gray-500 animate-pulse">Connecting to API...</div>
+      <div className="min-h-screen flex items-center justify-center bg-paper">
+        <div className="flex items-center gap-3">
+          <div className="w-1.5 h-1.5 rounded-full bg-ink-4 animate-pulse" />
+          <span className="text-sm text-ink-3">Connecting to API…</span>
+        </div>
       </div>
     )
   }
 
   if (apiError && !summary) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3">
-        <div className="text-2xl font-bold text-white">API server not reachable</div>
-        <p className="text-gray-400 text-sm">Make sure the API server is running on port 3001.</p>
-        <div className="mt-2 bg-gray-900 rounded-lg px-5 py-3 font-mono text-sm text-indigo-400">pnpm run dev</div>
+      <div className="min-h-screen flex flex-col items-start justify-center bg-paper px-16">
+        <div className="border-l-[3px] border-ink pl-8 py-4">
+          <h1 className="text-4xl font-black mb-2">API Not Reachable</h1>
+          <p className="text-sm text-ink-2 mb-6">Make sure the API server is running on port 3001.</p>
+          <code className="inline-block border border-ink bg-ink text-paper px-5 py-3 text-sm font-mono">
+            pnpm run dev
+          </code>
+        </div>
       </div>
     )
   }
@@ -368,311 +771,55 @@ export default function App() {
   const hasResults = summary && summary.runCount > 0 && summary.variants.A && summary.variants.B
 
   return (
-    <div className="min-h-screen p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-start justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-white">AI UX Simulator</h1>
-            <p className="text-gray-500 mt-1 text-sm">
-              A/B Testing with AI Personas
-              {summary && ` — ${summary.runCount} run${summary.runCount !== 1 ? 's' : ''}`}
-            </p>
-          </div>
-          {lastPoll && <div className="text-xs text-gray-600">Updated {lastPoll.toLocaleTimeString()}</div>}
-        </div>
+    <div className="min-h-screen bg-paper">
+      <div className="max-w-6xl mx-auto px-10 py-12">
 
-        {!hasResults ? <EmptyState /> : <Dashboard summary={summary!} onRefresh={fetchSummary} />}
-      </div>
-    </div>
-  )
-}
-
-function WinnerBanner({ winner, A, B }: { winner: Summary['winner']; A: VariantStats; B: VariantStats }) {
-  if (!winner) return null
-  return (
-    <div className={`rounded-xl p-5 mb-6 border ${
-      winner === 'A' ? 'bg-indigo-950/60 border-indigo-600'
-      : winner === 'B' ? 'bg-orange-950/60 border-orange-600'
-      : 'bg-gray-800 border-gray-700'
-    }`}>
-      <div className="text-lg font-bold">
-        {winner === 'tie' ? '🤝 Tie — both variants performed similarly' : `🏆 Variant ${winner} wins`}
-      </div>
-      {winner !== 'tie' && (
-        <div className="text-gray-300 text-sm mt-1">
-          {winner === 'A'
-            ? `${Math.round((A.successRate - B.successRate) * 100)}pp higher success rate · ${(B.avgStepCount - A.avgStepCount).toFixed(1)} fewer steps on average`
-            : `${Math.round((B.successRate - A.successRate) * 100)}pp higher success rate · ${(A.avgStepCount - B.avgStepCount).toFixed(1)} fewer steps on average`}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function TaskView({ A, B, personaResults }: { A: VariantStats; B: VariantStats; personaResults: PersonaResult[] }) {
-  const chartData = [{ name: 'Success Rate', A: Math.round(A.successRate * 100), B: Math.round(B.successRate * 100) }]
-
-  return (
-    <>
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <MetricCard label="Avg Score" aValue={Math.round(A.successRate * 100)} bValue={Math.round(B.successRate * 100)} format={v => `${v}%`} higherIsBetter />
-        <MetricCard label="Avg Completion Time" aValue={A.avgCompletionTimeMs} bValue={B.avgCompletionTimeMs} format={v => `${(v / 1000).toFixed(1)}s`} higherIsBetter={false} />
-        <MetricCard label="Avg Steps to Complete" aValue={A.avgStepCount} bValue={B.avgStepCount} format={v => v.toFixed(1)} higherIsBetter={false} />
-      </div>
-
-      <div className="grid grid-cols-2 gap-5 mb-6">
-        <div className="bg-gray-900 rounded-xl p-5">
-          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Success Rate</div>
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={chartData} barCategoryGap="40%">
-              <XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis domain={[0, 100]} tick={{ fill: '#6b7280', fontSize: 11 }} tickFormatter={v => `${v}%`} axisLine={false} tickLine={false} />
-              <Tooltip formatter={(v: number) => `${v}%`} contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8 }} />
-              <Legend />
-              <Bar dataKey="A" fill="#6366f1" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="B" fill="#f97316" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="bg-gray-900 rounded-xl p-5">
-          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Top Friction Points — Variant B</div>
-          {B.topFrictionPoints.length === 0 ? (
-            <p className="text-gray-600 text-sm">No friction points recorded</p>
-          ) : (
-            <ul className="space-y-3">
-              {B.topFrictionPoints.map((fp, i) => (
-                <li key={i} className="flex gap-3 text-sm">
-                  <span className="text-orange-500 font-mono text-xs mt-0.5">{i + 1}</span>
-                  <span className="text-gray-300 leading-snug">{fp}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-
-      <div className="bg-gray-900 rounded-xl p-5">
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Results by Persona (avg across sub-agents)</div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left">
-              <th className="text-gray-500 font-medium pb-3">Persona</th>
-              <th className="text-indigo-400 font-medium pb-3">Variant A</th>
-              <th className="text-orange-400 font-medium pb-3">Variant B</th>
-              <th className="text-gray-500 font-medium pb-3">Drift (A_10)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {personaResults.map((pr, i) => (
-              <tr key={i} className="border-t border-gray-800">
-                <td className="py-3 text-gray-200 font-medium whitespace-nowrap pr-4">{pr.personaName}</td>
-                <td className="py-3">
-                  {pr.variantA ? (
-                    <div>
-                      <ScoreBadge score={pr.variantA.successScore} />
-                      <span className="text-gray-600 ml-1 text-xs">{pr.variantA.steps.toFixed(1)} steps</span>
-                    </div>
-                  ) : <span className="text-gray-700">—</span>}
-                </td>
-                <td className="py-3">
-                  {pr.variantB ? (
-                    <div>
-                      <ScoreBadge score={pr.variantB.successScore} />
-                      <span className="text-gray-600 ml-1 text-xs">{pr.variantB.steps.toFixed(1)} steps</span>
-                    </div>
-                  ) : <span className="text-gray-700">—</span>}
-                </td>
-                <td className="py-3 text-xs text-gray-500 font-mono max-w-[180px]">
-                  {pr.variantA?.taskDrift || pr.variantB?.taskDrift || '—'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="mt-4 pt-4 border-t border-gray-800 flex gap-6 text-xs text-gray-600">
-          <span>Variant A: {A.runs} run{A.runs !== 1 ? 's' : ''}</span>
-          <span>Variant B: {B.runs} run{B.runs !== 1 ? 's' : ''}</span>
-        </div>
-      </div>
-    </>
-  )
-}
-
-function PopulationModelPanel({ model, onRefresh }: { model: PopulationModel; onRefresh: () => void }) {
-  const [editOpen, setEditOpen] = useState(false)
-
-  const chartData = [
-    { name: 'Weighted Score', A: Math.round(model.overallScore.A * 100), B: Math.round(model.overallScore.B * 100) },
-  ]
-
-  return (
-    <div className="mt-8">
-      <div className="flex items-center justify-between mb-4">
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-          Population Model — Weighted A/B Scores
-        </div>
-        <button
-          onClick={() => setEditOpen(o => !o)}
-          className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
-            editOpen
-              ? 'bg-indigo-700 text-indigo-100'
-              : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
-          }`}
-        >
-          {editOpen ? 'Close Editor' : 'Edit Weights'}
-        </button>
-      </div>
-
-      {/* Overall scores */}
-      <div className={`rounded-xl p-5 mb-6 border ${
-        model.winner === 'A' ? 'bg-indigo-950/40 border-indigo-700'
-        : model.winner === 'B' ? 'bg-orange-950/40 border-orange-700'
-        : 'bg-gray-800 border-gray-700'
-      }`}>
-        <div className="text-sm font-semibold text-gray-300 mb-3">
-          {model.winner === 'tie'
-            ? 'Population model — tie'
-            : `Population model — Variant ${model.winner} leads`}
-        </div>
-        <div className="flex gap-6 items-end">
-          <div>
-            <div className="text-xs text-gray-500 mb-1">Variant A (weighted)</div>
-            <div className="text-3xl font-bold text-indigo-300">{pct(model.overallScore.A)}</div>
-          </div>
-          <div>
-            <div className="text-xs text-gray-500 mb-1">Variant B (weighted)</div>
-            <div className="text-3xl font-bold text-orange-300">{pct(model.overallScore.B)}</div>
-          </div>
-          <div className="ml-auto">
-            <ResponsiveContainer width={200} height={80}>
-              <BarChart data={chartData} barCategoryGap="30%">
-                <XAxis dataKey="name" hide />
-                <YAxis domain={[0, 100]} hide />
-                <Tooltip formatter={(v: number) => `${v}%`} contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8 }} />
-                <Legend />
-                <Bar dataKey="A" fill="#6366f1" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="B" fill="#f97316" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
-      {/* Per-persona summary cards */}
-      <div className="grid grid-cols-5 gap-3 mb-6">
-        {model.personaScores.map((ps, i) => (
-          <div key={i} className="bg-gray-900 rounded-xl p-4">
-            <div className="text-xs text-gray-400 font-medium mb-1 truncate">{ps.personaName.split(' (')[0]}</div>
-            <div className="text-xs text-gray-600 mb-2">group: {Math.round(ps.groupWeight * 100)}%</div>
-            <div className="text-xs font-mono space-y-1">
-              <div><span className="text-gray-600">A: </span><ScoreBadge score={ps.weightedPersonaScore.A} /></div>
-              <div><span className="text-gray-600">B: </span><ScoreBadge score={ps.weightedPersonaScore.B} /></div>
+        {/* Header */}
+        <header className="border-t-2 border-ink pt-7 mb-14">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <h1 className="text-6xl font-black tracking-tight leading-none mb-4">
+                Hierarchical Orchestration <br />of Modelled Clients
+              </h1>
+              <p className="text-sm text-ink-2">
+                {summary
+                  ? `${summary.runCount} simulation run${summary.runCount !== 1 ? 's' : ''} across 5 personas, 3 tasks, 2 variants`
+                  : 'Simulate user flows · Compare variants · Surface friction'}
+              </p>
+            </div>
+            <div className="flex flex-col items-end gap-4 mt-1">
+              <div className="text-ink-4">
+                <DotGrid rows={3} cols={5} gap={10} r={1.5} />
+              </div>
+              <div className="flex items-center gap-6 text-[10px] text-ink-3 font-mono">
+                {lastPoll && <span>Updated {lastPoll.toLocaleTimeString()}</span>}
+                <div className="flex items-center gap-3">
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-2.5 h-2.5" style={{ backgroundColor: '#1A5F8A' }} />
+                    Variant A
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-2.5 h-2.5" style={{ backgroundColor: '#6BA3BE' }} />
+                    Variant B
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
-        ))}
-      </div>
+        </header>
 
-      {/* Sub-agent breakdown table */}
-      <div className="bg-gray-900 rounded-xl p-5">
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Sub-Agent Breakdown</div>
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="text-left text-gray-600">
-              <th className="pb-3 font-medium pr-4">Persona</th>
-              <th className="pb-3 font-medium pr-3">Group Wt</th>
-              <th className="pb-3 font-medium pr-4">Sub-Agent</th>
-              <th className="pb-3 font-medium pr-3">SA Wt</th>
-              <th className="pb-3 font-medium text-indigo-400 pr-3">A Score</th>
-              <th className="pb-3 font-medium text-orange-400 pr-3">B Score</th>
-              <th className="pb-3 font-medium">Task Drift (A)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {model.personaScores.flatMap((ps, pi) =>
-              ps.subAgents.map((sa, si) => (
-                <tr key={`${pi}-${si}`} className="border-t border-gray-800">
-                  {si === 0 && (
-                    <td className="py-2 text-gray-300 font-medium pr-4 align-top" rowSpan={ps.subAgents.length}>
-                      {ps.personaName.split(' (')[0]}
-                    </td>
-                  )}
-                  {si === 0 && (
-                    <td className="py-2 text-gray-500 font-mono pr-3 align-top" rowSpan={ps.subAgents.length}>
-                      {Math.round(ps.groupWeight * 100)}%
-                    </td>
-                  )}
-                  <td className="py-2 pr-4">
-                    <span className="font-mono text-gray-300">{sa.subAgentType}</span>
-                    <span className="text-gray-600 ml-1">— {SA_LABELS[sa.subAgentType]}</span>
-                  </td>
-                  <td className="py-2 font-mono text-gray-500 pr-3">{Math.round(sa.weight * 100)}%</td>
-                  <td className="py-2 pr-3">
-                    {sa.variantA ? <ScoreBadge score={sa.variantA.successScore} /> : <span className="text-gray-700">—</span>}
-                  </td>
-                  <td className="py-2 pr-3">
-                    {sa.variantB ? <ScoreBadge score={sa.variantB.successScore} /> : <span className="text-gray-700">—</span>}
-                  </td>
-                  <td className="py-2 text-gray-600 font-mono max-w-[200px] truncate">
-                    {sa.variantA?.taskDrift || '—'}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+        {/* Main content */}
+        {!hasResults ? <EmptyState /> : <Dashboard summary={summary!} onRefresh={fetchSummary} />}
 
-      {/* Inline weight editor */}
-      {editOpen && (
-        <WeightsEditor
-          model={model}
-          onApplied={() => {
-            onRefresh()
-            setEditOpen(false)
-          }}
-        />
-      )}
+        {/* Footer */}
+        <footer className="border-t border-rule mt-16 pt-6 flex items-center justify-between">
+          <span className="text-[10px] text-ink-4 tracking-label uppercase">HOMC — Hackathon A/B Simulator</span>
+          <div className="text-ink-4">
+            <DotGrid rows={1} cols={5} gap={8} r={1} />
+          </div>
+        </footer>
+
+      </div>
     </div>
-  )
-}
-
-function Dashboard({ summary, onRefresh }: { summary: Summary; onRefresh: () => void }) {
-  const taskIds = Object.keys(summary.tasks ?? {})
-  const [activeTask, setActiveTask] = useState<string>(taskIds[0] ?? '')
-
-  const taskData = summary.tasks?.[activeTask]
-  const A = taskData?.A ?? summary.variants.A
-  const B = taskData?.B ?? summary.variants.B
-  const personaResults = taskData?.personaResults ?? summary.personaResults
-  const winner = taskData?.winner ?? summary.winner
-
-  return (
-    <>
-      {taskIds.length > 1 && (
-        <div className="flex gap-2 mb-6">
-          {taskIds.map(id => (
-            <button
-              key={id}
-              onClick={() => setActiveTask(id)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeTask === id
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
-              }`}
-            >
-              {TASK_LABELS[id] ?? id}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <WinnerBanner winner={winner} A={A} B={B} />
-      <TaskView A={A} B={B} personaResults={personaResults} />
-
-      {summary.populationModel && (
-        <PopulationModelPanel model={summary.populationModel} onRefresh={onRefresh} />
-      )}
-    </>
   )
 }

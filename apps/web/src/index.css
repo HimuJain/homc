@@ -1,7 +1,62 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-gray-950 text-white;
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: #F5F1E8;
+    color: #000000;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #F5F1E8;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #D4CFC3;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #9B9790;
+  }
+}
+
+@layer utilities {
+  .label {
+    @apply text-[10px] font-semibold uppercase tracking-label text-ink-3;
+  }
+
+  .section-rule {
+    @apply border-t border-rule pt-8;
+  }
+
+  .bar-a {
+    background-color: #1A5F8A;
+  }
+
+  .bar-b {
+    background-color: #6BA3BE;
+  }
+
+  .hover-lift {
+    @apply transition-all duration-150;
+  }
+  .hover-lift:hover {
+    @apply opacity-80;
+  }
 }
