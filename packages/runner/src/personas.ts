@@ -10,8 +10,6 @@ export const personas: Persona[] = [
     explorationDepth: 0.4,
     errorTolerance: 0.2,
     speedBias: 0.9,
-    chaosRate: 0.15,
-    distractionDepth: 0.7,
   },
   {
     id: 'cautious-user',
@@ -22,8 +20,6 @@ export const personas: Persona[] = [
     explorationDepth: 0.7,
     errorTolerance: 0.6,
     speedBias: 0.2,
-    chaosRate: 0.05,
-    distractionDepth: 0.2,
   },
   {
     id: 'confused-user',
@@ -34,8 +30,6 @@ export const personas: Persona[] = [
     explorationDepth: 0.5,
     errorTolerance: 0.5,
     speedBias: 0.4,
-    chaosRate: 0.3,
-    distractionDepth: 0.55,
   },
   {
     id: 'impulse-buyer',
@@ -46,8 +40,6 @@ export const personas: Persona[] = [
     explorationDepth: 0.2,
     errorTolerance: 0.1,
     speedBias: 1.0,
-    chaosRate: 0.35,
-    distractionDepth: 0.85,
   },
   {
     id: 'accessibility-user',
@@ -58,8 +50,6 @@ export const personas: Persona[] = [
     explorationDepth: 0.8,
     errorTolerance: 0.7,
     speedBias: 0.1,
-    chaosRate: 0.08,
-    distractionDepth: 0.3,
   },
   {
     id: 'thorough-user',
@@ -70,8 +60,6 @@ export const personas: Persona[] = [
     explorationDepth: 0.9,
     errorTolerance: 0.8,
     speedBias: 0.1,
-    chaosRate: 0.0,
-    distractionDepth: 0.0,
   },
   {
     id: 'mobile-user',
@@ -82,7 +70,5 @@ export const personas: Persona[] = [
     explorationDepth: 0.3,
     errorTolerance: 0.4,
     speedBias: 0.6,
-    chaosRate: 0.0,
-    distractionDepth: 0.0,
   },
 ]

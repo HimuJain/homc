@@ -17,6 +17,7 @@ export async function decideAction(
   previousSteps: Step[],
   originalTask?: Task,
   distractionDepth?: number,
+  blendMode?: boolean,
 ): Promise<Action> {
   const recentHistory = previousSteps
     .slice(-5)
@@ -26,18 +27,23 @@ export async function decideAction(
   const patienceLabel = persona.patience < 0.4 ? 'impatient' : persona.patience > 0.7 ? 'patient' : 'moderately patient'
   const explorationLabel = persona.explorationDepth > 0.6 ? 'explores thoroughly' : 'sticks to obvious paths'
 
-  // Build chaos context when in a distracted state
+  // Build chaos context depending on sub-agent mode
   let chaosContext = ''
-  if (originalTask && distractionDepth !== undefined) {
-    if (distractionDepth <= 0.5) {
-      chaosContext = `\nBACKGROUND TASK (you still plan to complete this after): ${originalTask.goal}`
-    } else if (distractionDepth <= 0.75) {
-      chaosContext = `\nSECONDARY GOAL (return to this after current task resolves): ${originalTask.goal}`
+  let chaosRule = ''
+  if (originalTask) {
+    if (blendMode) {
+      chaosContext = `\nCO-GOAL (try to accomplish this simultaneously): ${originalTask.goal}`
+      chaosRule = '\n- You are pursuing two goals at once. Complete your CURRENT TASK GOAL, but actively look for opportunities to satisfy your CO-GOAL on the same page or nearby pages.'
+    } else if (distractionDepth !== undefined) {
+      if (distractionDepth <= 0.5) {
+        chaosContext = `\nBACKGROUND TASK (you still plan to complete this after): ${originalTask.goal}`
+      } else if (distractionDepth <= 0.75) {
+        chaosContext = `\nSECONDARY GOAL (return to this after current task resolves): ${originalTask.goal}`
+      }
+      // distractionDepth > 0.75: no mention of original task
+      chaosRule = '\n- You got distracted from another task. Complete your CURRENT TASK GOAL first, then you will return.'
     }
-    // distractionDepth > 0.75: no mention of original task
   }
-
-  const chaosRule = originalTask ? '\n- You got distracted from another task. Complete your CURRENT TASK GOAL first, then you will return.' : ''
 
   const prompt = `You are simulating a real user interacting with a web page to complete a task.
 
@@ -99,7 +105,7 @@ Rules:
     const raw = response.choices[0]?.message?.content?.trim() ?? ''
     if (!raw) {
       console.error('[Agent] Empty response from API')
-      const fallback = fallbackAction(task, url, pageText, previousSteps, originalTask, distractionDepth)
+      const fallback = fallbackAction(task, url, pageText, previousSteps)
       console.warn('[Agent] Falling back to deterministic action:', fallback.reason)
       return fallback
     }
@@ -108,19 +114,19 @@ Rules:
       return JSON.parse(text) as Action
     } catch {
       console.error('[Agent] JSON parse failed. Raw response:', raw)
-      const fallback = fallbackAction(task, url, pageText, previousSteps, originalTask, distractionDepth)
+      const fallback = fallbackAction(task, url, pageText, previousSteps)
       console.warn('[Agent] Falling back to deterministic action:', fallback.reason)
       return fallback
     }
   } catch (err) {
     console.error('[Agent] API call failed:', (err as Error).message)
-    const fallback = fallbackAction(task, url, pageText, previousSteps, originalTask, distractionDepth)
+    const fallback = fallbackAction(task, url, pageText, previousSteps)
     console.warn('[Agent] Falling back to deterministic action:', fallback.reason)
     return fallback
   }
 }
 
-function fallbackAction(task: Task, url: string, pageText: string, previousSteps: Step[], originalTask?: Task, distractionDepth?: number): Action {
+function fallbackAction(task: Task, url: string, pageText: string, previousSteps: Step[]): Action {
   const text = pageText.toLowerCase()
   const filledSelectors = new Set(
     previousSteps.flatMap(s => (s.action.type === 'fill' ? [s.action.selector] : [])),

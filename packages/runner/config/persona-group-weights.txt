@@ -1,0 +1,5 @@
+Alex=0.25
+Morgan=0.20
+Jamie=0.20
+Jordan=0.20
+Dana=0.15

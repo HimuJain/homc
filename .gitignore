@@ -4,3 +4,4 @@ dist/
 .env
 logs/*.json
 !logs/.gitkeep
+.DS_Store

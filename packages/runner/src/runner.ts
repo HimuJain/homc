@@ -1,5 +1,5 @@
 import { chromium } from 'playwright'
-import type { Persona, Task, RunResult, Step, TaskHistoryEntry } from '@homc/shared'
+import type { Persona, Task, RunResult, Step, TaskHistoryEntry, SubAgentType } from '@homc/shared'
 import { computeMetrics } from '@homc/eval'
 import { decideAction } from './agent'
 import { writeRunResult } from './logger'
@@ -12,8 +12,6 @@ const VARIANT_URLS: Record<'A' | 'B', string> = {
 const MAX_STEPS = 15
 const ACTION_TIMEOUT = 8000
 
-// Task-specific success patterns — prevents pricing text on the home page from
-// falsely triggering success for the create-account or learn-about-company tasks.
 const SUCCESS_PATTERNS: Record<string, string[]> = {
   'create-account': [
     'welcome to shopease!',
@@ -32,9 +30,43 @@ const SUCCESS_PATTERNS: Record<string, string[]> = {
   ],
 }
 
+const TASK_KEYWORDS: Record<string, string[]> = {
+  'find-pricing': ['pricing', 'plans', 'price', 'cost', 'subscribe', 'per month', '$', 'free plan', 'plus plan', 'member plan'],
+  'create-account': ['sign up', 'signup', 'register', 'create account', 'join', 'get started', 'start for free'],
+  'learn-about-company': ['about', 'team', 'story', 'founded', 'mission', 'our values', 'who we are', 'company'],
+}
+
 function isSuccessDeterministic(taskId: string, pageText: string): boolean {
   const lower = pageText.toLowerCase()
   return (SUCCESS_PATTERNS[taskId] ?? []).some(p => lower.includes(p))
+}
+
+// Picks the non-primary task most relevant to the current page's content.
+function selectChaosTask(pageText: string, primaryTask: Task, allTasks: Task[]): Task {
+  const lower = pageText.toLowerCase()
+  const candidates = allTasks.filter(t => t.id !== primaryTask.id)
+  let best = candidates[0]
+  let bestScore = -1
+  for (const t of candidates) {
+    const score = (TASK_KEYWORDS[t.id] ?? []).filter(kw => lower.includes(kw)).length
+    if (score > bestScore) { bestScore = score; best = t }
+  }
+  return best
+}
+
+function computeSuccessScore(
+  subAgentType: SubAgentType,
+  primarySuccess: boolean,
+  chaosTask: Task | null,
+  resolvedTasks: Map<string, boolean>,
+): number {
+  const chaosSuccess = chaosTask ? resolvedTasks.get(chaosTask.id) === true : false
+  switch (subAgentType) {
+    case 'A_00': return primarySuccess ? 1.0 : 0.0
+    case 'A_10': return 0.80 * (primarySuccess ? 1 : 0) + 0.20 * (chaosSuccess ? 1 : 0)
+    case 'A_11': return 0.60 * (primarySuccess ? 1 : 0) + 0.40 * (chaosSuccess ? 1 : 0)
+    case 'A_12': return chaosSuccess ? 1.0 : 0.0
+  }
 }
 
 export async function runSimulation(
@@ -42,8 +74,9 @@ export async function runSimulation(
   persona: Persona,
   task: Task,
   allTasks: Task[],
+  subAgentType: SubAgentType,
 ): Promise<RunResult> {
-  console.log(`  → Variant ${variant} | ${persona.name}`)
+  console.log(`  → Variant ${variant} | ${persona.name} [${subAgentType}]`)
 
   const browser = await chromium.launch({ headless: true })
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
@@ -56,10 +89,14 @@ export async function runSimulation(
   ]
   const resolvedTasks = new Map<string, boolean>()
 
+  // Page-based chaos state (A_10, A_11, A_12 only)
+  const pagesVisited = new Set<string>()
+  let chaosEvaluated = false   // true once the evaluation window is closed
+  let chaosFiredTask: Task | null = null
+
   const startedAt = Date.now()
   const steps: Step[] = []
   const frictionPoints: string[] = []
-  let success = false
 
   try {
     await page.goto(VARIANT_URLS[variant], { timeout: 10000 })
@@ -71,7 +108,60 @@ export async function runSimulation(
       const pageText = await page.locator('body').innerText().catch(() => '')
       const pageElements = await extractPageElements(page)
 
-      // Success check for current task
+      // === Page-entry chaos evaluation (A_10, A_11, A_12 only) ===
+      if (subAgentType !== 'A_00' && !chaosEvaluated && !pagesVisited.has(url)) {
+        pagesVisited.add(url)
+        const pageNumber = pagesVisited.size
+
+        let fireChaos = false
+        if (pageNumber === 1) {
+          fireChaos = Math.random() < 0.70
+        } else {
+          // Page 2+: guaranteed
+          fireChaos = true
+          chaosEvaluated = true
+        }
+
+        if (fireChaos) {
+          chaosEvaluated = true
+          const chaosTarget = selectChaosTask(pageText, originalTask, allTasks)
+          chaosFiredTask = chaosTarget
+
+          if (subAgentType === 'A_12') {
+            // Abandon primary entirely — no stack push, no return planned
+            console.log(`    ↳ Full chaos [${subAgentType}] at step ${i + 1}: abandoned ${currentTask.id}, now pursuing ${chaosTarget.id}`)
+            frictionPoints.push(`Full chaos at step ${i + 1}: abandoned ${currentTask.id}, pursuing ${chaosTarget.id}`)
+            taskHistory.push({ stepNumber: i + 1, taskId: chaosTarget.id, taskGoal: chaosTarget.goal, trigger: 'chaos' })
+            currentTask = chaosTarget
+          } else {
+            // A_10 / A_11: push primary, pursue chaos, return after
+            const modeLabel = subAgentType === 'A_11' ? 'blend' : 'return'
+            console.log(`    ↳ Chaos [${subAgentType}/${modeLabel}] at step ${i + 1}: ${currentTask.id} → ${chaosTarget.id}`)
+            frictionPoints.push(`Chaos distraction at step ${i + 1}: switched from ${currentTask.id} to ${chaosTarget.id}`)
+            taskStack.push(currentTask)
+            currentTask = chaosTarget
+            taskHistory.push({ stepNumber: i + 1, taskId: chaosTarget.id, taskGoal: chaosTarget.goal, trigger: 'chaos' })
+          }
+
+          // Immediate success check on this page for the new task
+          if (isSuccessDeterministic(currentTask.id, pageText)) {
+            resolvedTasks.set(currentTask.id, true)
+            setLastOutcome(taskHistory, currentTask.id, 'success')
+            console.log(`    ✓ Completed ${currentTask.id} at step ${i + 1} (immediate after chaos)`)
+            if (taskStack.length > 0) {
+              currentTask = taskStack.pop()!
+              taskHistory.push({ stepNumber: i + 1, taskId: currentTask.id, taskGoal: currentTask.goal, trigger: 'return' })
+              continue
+            }
+            break
+          }
+        }
+      } else if (!pagesVisited.has(url)) {
+        // Track page visits even when chaos is off or already evaluated
+        pagesVisited.add(url)
+      }
+
+      // === Success check for current task ===
       if (isSuccessDeterministic(currentTask.id, pageText)) {
         resolvedTasks.set(currentTask.id, true)
         setLastOutcome(taskHistory, currentTask.id, 'success')
@@ -84,33 +174,16 @@ export async function runSimulation(
         break
       }
 
-      // Chaos check - may switch to a different task
-      const tasksInPlay = new Set([currentTask.id, ...taskStack.map(t => t.id)])
-      const available = allTasks.filter(t => !tasksInPlay.has(t.id) && !resolvedTasks.has(t.id))
-      if (available.length > 0 && Math.random() < persona.chaosRate) {
-        const chaosTask = available[Math.floor(Math.random() * available.length)]
-        console.log(`    ↳ Chaos at step ${i + 1}: ${currentTask.id} → ${chaosTask.id}`)
-        frictionPoints.push(`Chaos distraction at step ${i + 1}: switched from ${currentTask.id} to ${chaosTask.id}`)
-        taskStack.push(currentTask)
-        currentTask = chaosTask
-        taskHistory.push({ stepNumber: i + 1, taskId: chaosTask.id, taskGoal: chaosTask.goal, trigger: 'chaos' })
-        // Immediate success check for new task on current page
-        if (isSuccessDeterministic(currentTask.id, pageText)) {
-          resolvedTasks.set(currentTask.id, true)
-          setLastOutcome(taskHistory, currentTask.id, 'success')
-          console.log(`    ✓ Completed ${currentTask.id} at step ${i + 1} (immediate)`)
-          currentTask = taskStack.pop()!
-          taskHistory.push({ stepNumber: i + 1, taskId: currentTask.id, taskGoal: currentTask.goal, trigger: 'return' })
-          continue
-        }
-      }
+      // === Decide action ===
+      // Pass chaos context based on sub-agent type
+      const inStack = taskStack.length > 0
+      const agentOriginalTask = inStack ? originalTask : undefined
+      const agentDistractionDepth = (inStack && subAgentType === 'A_10') ? 0.3 : undefined
+      const agentBlendMode = (inStack && subAgentType === 'A_11') ? true : undefined
 
-      // Decide action (pass originalTask context when in chaos state)
-      const inChaosState = taskStack.length > 0
       const action = await decideAction(
         persona, currentTask, screenshot, url, pageText, pageElements, steps,
-        inChaosState ? originalTask : undefined,
-        inChaosState ? persona.distractionDepth : undefined,
+        agentOriginalTask, agentDistractionDepth, agentBlendMode,
       )
 
       // Handle done
@@ -198,18 +271,12 @@ export async function runSimulation(
   }
 
   const endedAt = Date.now()
-  success = resolvedTasks.get(originalTask.id) === true
+  const primarySuccess = resolvedTasks.get(originalTask.id) === true
+  const success = subAgentType === 'A_12'
+    ? (chaosFiredTask ? resolvedTasks.get(chaosFiredTask.id) === true : false)
+    : primarySuccess
 
-  // Calculate successScore
-  const primaryWeight = Math.max(0, 0.95 - persona.chaosRate * persona.distractionDepth)
-  const chaosIds = [...new Set(taskHistory.map(e => e.taskId).filter(id => id !== originalTask.id))]
-  const chaosAttempted = chaosIds.length
-  const chaosCompleted = chaosIds.filter(id => resolvedTasks.get(id) === true).length
-  const chaosScore = chaosAttempted > 0 ? chaosCompleted / chaosAttempted : 0
-  const successScore = Math.max(0, Math.min(1,
-    primaryWeight * (success ? 1 : 0) + (1 - primaryWeight) * chaosScore
-  ))
-
+  const successScore = computeSuccessScore(subAgentType, primarySuccess, chaosFiredTask, resolvedTasks)
   const metrics = computeMetrics(steps, success, endedAt - startedAt)
 
   const result: RunResult = {
@@ -217,6 +284,7 @@ export async function runSimulation(
     variant,
     persona,
     task: originalTask,
+    subAgentType,
     success,
     successScore,
     taskHistory,
@@ -247,18 +315,15 @@ function setLastOutcome(
 async function extractPageElements(page: any): Promise<string> {
   return page.evaluate(() => {
     const lines: string[] = []
-    // Include a[id] so nav/action links (e.g. #nav-pricing, #pricing-link) are visible to the agent
     document.querySelectorAll('input, button, select, textarea, a[id]').forEach((el: any) => {
       const tag = el.tagName.toLowerCase()
       const id = el.id ? `#${el.id}` : ''
-      // getAttribute returns only explicitly-set attributes; el.type includes browser defaults (e.g. buttons default to "submit")
       const typeAttr = el.getAttribute('type')
       const type = typeAttr ? `[type="${typeAttr}"]` : ''
       const name = el.name ? `[name="${el.name}"]` : ''
       const placeholder = el.placeholder ? ` — "${el.placeholder}"` : ''
       const dateHint = typeAttr === 'date' ? ' — format: YYYY-MM-DD (e.g. 1990-01-15)' : ''
       const text = el.textContent?.trim()
-      // Always show text content for clickable elements so the agent understands what they do
       const clickText = (tag === 'a' || tag === 'button') && text ? ` "${text}"` : ''
       const label = id || name
         ? `${tag}${id}${type}${name}${placeholder}${dateHint}${clickText}`
@@ -280,7 +345,6 @@ async function executeAction(page: any, action: Step['action']) {
     try {
       await page.fill(action.selector, action.value, { timeout: ACTION_TIMEOUT })
     } catch {
-      // Fallback: set value directly via evaluate (required for date inputs and stubborn fields)
       const ok = await page.evaluate(([sel, val]: [string, string]) => {
         const el = document.querySelector(sel) as HTMLInputElement | null
         if (!el) return false

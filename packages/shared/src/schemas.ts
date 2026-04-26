@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+export const SubAgentTypeSchema = z.enum(['A_00', 'A_10', 'A_11', 'A_12'])
+
 export const PersonaSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -9,8 +11,6 @@ export const PersonaSchema = z.object({
   explorationDepth: z.number().min(0).max(1),
   errorTolerance: z.number().min(0).max(1),
   speedBias: z.number().min(0).max(1),
-  chaosRate: z.number().min(0).max(1),
-  distractionDepth: z.number().min(0).max(1),
 })
 
 export const TaskSchema = z.object({
@@ -61,6 +61,7 @@ export const RunResultSchema = z.object({
   variant: z.enum(['A', 'B']),
   persona: PersonaSchema,
   task: TaskSchema,
+  subAgentType: SubAgentTypeSchema.optional(),
   success: z.boolean(),
   successScore: z.number().min(0).max(1),
   taskHistory: z.array(TaskHistoryEntrySchema),
@@ -71,6 +72,7 @@ export const RunResultSchema = z.object({
   frictionPoints: z.array(z.string()),
 })
 
+export type SubAgentType = z.infer<typeof SubAgentTypeSchema>
 export type Persona = z.infer<typeof PersonaSchema>
 export type Task = z.infer<typeof TaskSchema>
 export type Action = z.infer<typeof ActionSchema>
@@ -103,6 +105,27 @@ export interface TaskStats {
   winner: 'A' | 'B' | 'tie' | null
 }
 
+export interface SubAgentResult {
+  subAgentType: SubAgentType
+  weight: number
+  variantA: { successScore: number; steps: number; timeMs: number; taskDrift: string } | null
+  variantB: { successScore: number; steps: number; timeMs: number; taskDrift: string } | null
+  weightedScore: { A: number; B: number }
+}
+
+export interface PersonaWeightedScore {
+  personaName: string
+  groupWeight: number
+  subAgents: SubAgentResult[]
+  weightedPersonaScore: { A: number; B: number }
+}
+
+export interface PopulationModel {
+  personaScores: PersonaWeightedScore[]
+  overallScore: { A: number; B: number }
+  winner: 'A' | 'B' | 'tie' | null
+}
+
 export interface Summary {
   runCount: number
   lastUpdated: number
@@ -110,4 +133,5 @@ export interface Summary {
   personaResults: PersonaResult[]
   winner: 'A' | 'B' | 'tie' | null
   tasks: Record<string, TaskStats>
+  populationModel?: PopulationModel
 }
