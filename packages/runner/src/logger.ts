@@ -2,7 +2,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import type {
   RunResult, Summary, VariantStats, PersonaResult, TaskStats, TaskHistoryEntry,
-  SubAgentType, SubAgentResult, PersonaWeightedScore, PopulationModel,
+  SubAgentType, SubAgentResult, PersonaWeightedScore, PopulationModel, ClickEvent,
 } from '@homc/shared'
 import { loadSimConfig, personaConfigKey } from './config'
 
@@ -25,7 +25,7 @@ export function rebuildSummary(): void {
 function updateSummary(): void {
   const files = fs
     .readdirSync(LOGS_DIR)
-    .filter(f => f.endsWith('.json') && f !== 'summary.json')
+    .filter(f => f.endsWith('.json') && f !== 'summary.json' && f !== 'clicks.json')
 
   const results: RunResult[] = files.map(f =>
     JSON.parse(fs.readFileSync(path.join(LOGS_DIR, f), 'utf-8')),
@@ -221,6 +221,19 @@ function buildPopulationModel(results: RunResult[]): PopulationModel {
   const popWinner: PopulationModel['winner'] = Math.abs(diff) < 0.05 ? 'tie' : diff > 0 ? 'A' : 'B'
 
   return { personaScores, overallScore, winner: popWinner }
+}
+
+export function appendClickEvents(events: ClickEvent[]): void {
+  if (events.length === 0) return
+  fs.mkdirSync(LOGS_DIR, { recursive: true })
+  const clicksPath = path.join(LOGS_DIR, 'clicks.json')
+  let existing: ClickEvent[] = []
+  if (fs.existsSync(clicksPath)) {
+    try {
+      existing = JSON.parse(fs.readFileSync(clicksPath, 'utf-8'))
+    } catch { existing = [] }
+  }
+  fs.writeFileSync(clicksPath, JSON.stringify([...existing, ...events], null, 2))
 }
 
 const avg = (nums: number[]) => nums.length > 0 ? nums.reduce((a, b) => a + b, 0) / nums.length : 0

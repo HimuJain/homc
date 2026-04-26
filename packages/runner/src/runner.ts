@@ -2,7 +2,7 @@ import { chromium } from 'playwright'
 import type { Persona, Task, RunResult, Step, TaskHistoryEntry, SubAgentType } from '@homc/shared'
 import { computeMetrics } from '@homc/eval'
 import { decideAction } from './agent'
-import { writeRunResult } from './logger'
+import { writeRunResult, appendClickEvents } from './logger'
 
 const VARIANT_URLS: Record<'A' | 'B', string> = {
   A: process.env.VARIANT_A_URL ?? 'http://localhost:5174/variant-a.html',
@@ -97,6 +97,7 @@ export async function runSimulation(
   const startedAt = Date.now()
   const steps: Step[] = []
   const frictionPoints: string[] = []
+  const pendingClicks: Array<{ x: number; y: number; selector: string; description: string; taskId: string }> = []
 
   try {
     await page.goto(VARIANT_URLS[variant], { timeout: 10000 })
@@ -218,12 +219,16 @@ export async function runSimulation(
       }
 
       // Execute action
+      let clickCoords: { x: number; y: number } | null = null
       try {
-        await executeAction(page, action)
+        clickCoords = await executeAction(page, action)
       } catch (err) {
         const msg = `Step ${i + 1}: Could not execute "${action.type}" on "${(action as any).selector ?? ''}"`
         frictionPoints.push(msg)
         console.log(`    ⚠ ${msg}`)
+      }
+      if (action.type === 'click' && clickCoords) {
+        pendingClicks.push({ ...clickCoords, selector: action.selector, description: action.reason, taskId: currentTask.id })
       }
 
       steps.push({
@@ -296,6 +301,20 @@ export async function runSimulation(
   }
 
   await writeRunResult(result)
+  try {
+    appendClickEvents(pendingClicks.map(c => ({
+      x: c.x,
+      y: c.y,
+      selector: c.selector,
+      description: c.description,
+      taskId: c.taskId,
+      personaName: persona.name,
+      variant,
+      subAgentType,
+      success,
+      timestamp: endedAt,
+    })))
+  } catch { /* non-fatal */ }
   return result
 }
 
@@ -334,13 +353,28 @@ async function extractPageElements(page: any): Promise<string> {
   }).catch(() => '')
 }
 
-async function executeAction(page: any, action: Step['action']) {
+async function executeAction(page: any, action: Step['action']): Promise<{ x: number; y: number } | null> {
   if (action.type === 'click') {
+    let coords: { x: number; y: number } | null = null
+    try {
+      const box = await page.locator(action.selector).first().boundingBox({ timeout: 2000 })
+      const vp = page.viewportSize()
+      const [scrollY, scrollHeight] = await page.evaluate(
+        () => [window.scrollY, document.documentElement.scrollHeight] as [number, number]
+      ).catch(() => [0, 0] as [number, number])
+      if (box && vp && scrollHeight > 0) {
+        coords = {
+          x: Math.max(0, Math.min(1, (box.x + box.width / 2) / vp.width)),
+          y: Math.max(0, Math.min(1, (box.y + box.height / 2 + scrollY) / scrollHeight)),
+        }
+      }
+    } catch { /* element not yet visible */ }
     try {
       await page.click(action.selector, { timeout: ACTION_TIMEOUT })
     } catch {
       await page.locator(action.selector).first().click({ timeout: ACTION_TIMEOUT, force: true })
     }
+    return coords
   } else if (action.type === 'fill') {
     try {
       await page.fill(action.selector, action.value, { timeout: ACTION_TIMEOUT })
@@ -358,4 +392,5 @@ async function executeAction(page: any, action: Step['action']) {
   } else if (action.type === 'scroll') {
     await page.evaluate(() => window.scrollBy(0, 300))
   }
+  return null
 }

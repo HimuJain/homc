@@ -5,6 +5,7 @@ import { personas } from './personas'
 import { tasks } from './tasks'
 import { runSimulation } from './runner'
 import { loadSimConfig } from './config'
+import { captureVariantScreenshots } from './screenshots'
 import type { SubAgentType } from '@homc/shared'
 
 const VARIANTS: Array<'A' | 'B'> = ['A', 'B']
@@ -73,6 +74,11 @@ async function main() {
   }
 
   console.log(`\nLogs written to /logs. Open the dashboard to see full results.`)
+
+  console.log('\nCapturing full-page screenshots of both variants…')
+  await captureVariantScreenshots().catch(err =>
+    console.warn('[Screenshots] Failed (non-fatal):', err.message)
+  )
 }
 
 main().catch(err => {

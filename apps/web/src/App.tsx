@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
+import HeatmapPanel from './HeatmapPanel'
+import SuggestionsPanel from './SuggestionsPanel'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -683,9 +685,10 @@ function PopulationModelPanel({ model, onRefresh }: { model: PopulationModel; on
 
 function Dashboard({ summary, onRefresh }: { summary: Summary; onRefresh: () => void }) {
   const taskIds = Object.keys(summary.tasks ?? {})
-  const [activeTask, setActiveTask] = useState<string>(taskIds[0] ?? '')
+  const [activeTab, setActiveTab] = useState<string>(taskIds[0] ?? '')
 
-  const taskData = summary.tasks?.[activeTask]
+  const isSpecialTab = activeTab === '__heatmap__' || activeTab === '__suggestions__'
+  const taskData = isSpecialTab ? undefined : summary.tasks?.[activeTab]
   const A = taskData?.A ?? summary.variants.A
   const B = taskData?.B ?? summary.variants.B
   const personaResults = taskData?.personaResults ?? summary.personaResults
@@ -694,14 +697,14 @@ function Dashboard({ summary, onRefresh }: { summary: Summary; onRefresh: () => 
   return (
     <>
       {/* Task tabs */}
-      {taskIds.length > 1 && (
+      {taskIds.length > 0 && (
         <div className="flex border-b-2 border-ink mb-12">
           {taskIds.map(id => (
             <button
               key={id}
-              onClick={() => setActiveTask(id)}
+              onClick={() => setActiveTab(id)}
               className={`px-6 py-3 text-xs font-semibold tracking-label uppercase transition-colors ${
-                activeTask === id
+                activeTab === id
                   ? 'bg-ink text-paper'
                   : 'text-ink-3 hover:text-ink'
               }`}
@@ -709,14 +712,41 @@ function Dashboard({ summary, onRefresh }: { summary: Summary; onRefresh: () => 
               {TASK_LABELS[id] ?? id}
             </button>
           ))}
+          <button
+            onClick={() => setActiveTab('__heatmap__')}
+            className={`px-6 py-3 text-xs font-semibold tracking-label uppercase transition-colors ${
+              activeTab === '__heatmap__'
+                ? 'bg-ink text-paper'
+                : 'text-ink-3 hover:text-ink'
+            }`}
+          >
+            Heatmap
+          </button>
+          <button
+            onClick={() => setActiveTab('__suggestions__')}
+            className={`px-6 py-3 text-xs font-semibold tracking-label uppercase transition-colors ${
+              activeTab === '__suggestions__'
+                ? 'bg-ink text-paper'
+                : 'text-ink-3 hover:text-ink'
+            }`}
+          >
+            Suggestions
+          </button>
         </div>
       )}
 
-      <WinnerBanner winner={winner} A={A} B={B} />
-      <TaskView A={A} B={B} personaResults={personaResults} />
-
-      {summary.populationModel && (
-        <PopulationModelPanel model={summary.populationModel} onRefresh={onRefresh} />
+      {activeTab === '__heatmap__' ? (
+        <HeatmapPanel />
+      ) : activeTab === '__suggestions__' ? (
+        <SuggestionsPanel />
+      ) : (
+        <>
+          <WinnerBanner winner={winner} A={A} B={B} />
+          <TaskView A={A} B={B} personaResults={personaResults} />
+          {summary.populationModel && (
+            <PopulationModelPanel model={summary.populationModel} onRefresh={onRefresh} />
+          )}
+        </>
       )}
     </>
   )

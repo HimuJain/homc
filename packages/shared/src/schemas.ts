@@ -135,3 +135,16 @@ export interface Summary {
   tasks: Record<string, TaskStats>
   populationModel?: PopulationModel
 }
+
+export interface ClickEvent {
+  x: number
+  y: number
+  selector: string
+  description?: string
+  taskId: string
+  personaName: string
+  variant: 'A' | 'B'
+  subAgentType: SubAgentType
+  success: boolean
+  timestamp: number
+}
