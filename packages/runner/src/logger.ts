@@ -45,9 +45,11 @@ function buildSummary(results: RunResult[]): Summary {
     }
     const avgSuccessScore = avg(runs.map(r => r.successScore))
     const fpCount: Record<string, number> = {}
-    runs.flatMap(r => r.frictionPoints).forEach(fp => {
-      fpCount[fp] = (fpCount[fp] ?? 0) + 1
-    })
+    runs.flatMap(r => r.frictionPoints)
+      .filter(fp => !fp.startsWith('Full chaos') && !fp.startsWith('Chaos distraction'))
+      .forEach(fp => {
+        fpCount[fp] = (fpCount[fp] ?? 0) + 1
+      })
     const topFrictionPoints = Object.entries(fpCount)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)

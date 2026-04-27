@@ -482,30 +482,12 @@ function TaskView({ A, B, personaResults, winner }: { A: VariantStats; B: Varian
         />
       </div>
 
-      {/* Success rate bars + friction */}
-      <div className="grid grid-cols-2 gap-0">
-        <div className="border border-rule p-6 border-r-0">
-          <div className="label mb-6">Success Rate</div>
-          <div className="space-y-5">
-            <HBar label="A" value={Math.round(A.successRate * 100)} color="a" />
-            <HBar label="B" value={Math.round(B.successRate * 100)} color="b" />
-          </div>
-        </div>
-
-        <div className="border border-rule p-6">
-          <div className="label mb-6">Top Friction Points — Variant {frictionVariant}</div>
-          {frictionStats.topFrictionPoints.length === 0 ? (
-            <p className="text-ink-3 text-sm">No friction points recorded</p>
-          ) : (
-            <ol className="space-y-4">
-              {frictionStats.topFrictionPoints.map((fp, i) => (
-                <li key={i} className="flex gap-4">
-                  <span className="font-mono text-[10px] text-ink-3 w-4 pt-0.5 shrink-0">{i + 1}</span>
-                  <span className="text-sm text-ink-2 leading-snug">{fp}</span>
-                </li>
-              ))}
-            </ol>
-          )}
+      {/* Success rate bars */}
+      <div className="border border-rule p-6">
+        <div className="label mb-6">Success Rate</div>
+        <div className="space-y-5">
+          <HBar label="A" value={Math.round(A.successRate * 100)} color="a" />
+          <HBar label="B" value={Math.round(B.successRate * 100)} color="b" />
         </div>
       </div>
 
